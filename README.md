@@ -52,3 +52,19 @@ Dự án này được chia thành 3 phần chính bao gồm: Smart Contract (Bl
 1. Luôn kiểm tra kỹ code và chạy thử cục bộ trước khi tạo Pull Request.
 2. Không đẩy các file nhạy cảm (`.env`, khóa bí mật) lên repository công khai.
 3. Khi có sự thay đổi lớn về ABI hoặc cấu trúc database, hãy thông báo cho các thành viên khác.
+
+## Tích hợp Ethers.js (Server)
+
+Server sử dụng `ethers.js` để tương tác với hợp đồng thông minh FundChain. Chi tiết triển khai:
+
+- Helpers cho hợp đồng: `server/services/contractService.js` (bao bọc các gọi tới hợp đồng)
+- Sử dụng hợp đồng: `server/controllers/contractController.js` (gọi các hàm trong service)
+- Routes: các endpoint on-chain nằm trong `server/routes/campaigns.js` (tiền tố `/api/campaigns/onchain`)
+
+Các biến môi trường cần thiết (thêm vào `server/.env`, xem `server/.env.example`):
+
+- `CHAIN_RPC_URL` — endpoint RPC của mạng (ví dụ: `http://127.0.0.1:8545` hoặc URL Infura/Alchemy)
+- `PRIVATE_KEY` — private key dùng để ký giao dịch (BẢO MẬT, không chia sẻ)
+- `FUNDCHAIN_CONTRACT_ADDRESS` — địa chỉ hợp đồng FundChain đã được deploy
+
+Sau khi thiết lập các biến môi trường, khởi động server và gọi các endpoint on-chain (tạo chiến dịch, ghi nhận quyên góp, giải ngân, đóng chiến dịch). Server sẽ ký và gửi giao dịch bằng private key đã cung cấp.
