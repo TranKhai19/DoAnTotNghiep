@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import './App.css';
+import AdminDashboard from './AdminDashboard';
 
 // Using functional component structure internally to keep App.js readable
 const Header = () => (
@@ -901,23 +902,30 @@ const HomePage = () => (
   </>
 );
 
+const MainLayout = () => (
+  <div className="app">
+    <Header />
+    <Routes>
+      <Route path="/" element={<HomePage />} />
+      <Route path="/projects" element={<ProjectPage />} />
+      <Route path="/project/:id" element={<ProjectDetail />} />
+      <Route path="/beneficiary/:id" element={<BeneficiaryDetail />} />
+      <Route path="/organizations" element={<OrganizationsPage />} />
+      <Route path="/register" element={<RegisterPage />} />
+      <Route path="/login" element={<LoginPage />} />
+    </Routes>
+    <Newsletter />
+    <Footer />
+  </div>
+);
+
 function App() {
   return (
     <Router>
-      <div className="app">
-        <Header />
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/projects" element={<ProjectPage />} />
-          <Route path="/project/:id" element={<ProjectDetail />} />
-          <Route path="/beneficiary/:id" element={<BeneficiaryDetail />} />
-          <Route path="/organizations" element={<OrganizationsPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/login" element={<LoginPage />} />
-        </Routes>
-        <Newsletter />
-        <Footer />
-      </div>
+      <Routes>
+        <Route path="/admin/*" element={<AdminDashboard />} />
+        <Route path="/*" element={<MainLayout />} />
+      </Routes>
     </Router>
   );
 }
