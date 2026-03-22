@@ -1,11 +1,21 @@
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
+const cors = require('cors');
 const campaignRoutes = require('./routes/campaigns');
 const webhookRoutes = require('./routes/webhooks');
+const authRoutes = require('./routes/authRoutes');
+
 const socketService = require('./services/socketService');
 
+
 const app = express();
+
+// CORS cho các client như React chạy ở localhost:3002
+app.use(cors({
+  origin: ['http://localhost:3002', 'http://127.0.0.1:3002'],
+  credentials: true,
+}));
 
 // Middleware
 app.use(express.json());
@@ -21,6 +31,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // API Routes
+app.use('/api/auth', authRoutes);
 app.use('/api/campaigns', campaignRoutes);
 app.use('/api/webhooks', webhookRoutes);
 
