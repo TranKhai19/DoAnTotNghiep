@@ -1,0 +1,179 @@
+### ============================================
+### API CAMPAIGNS - TEST SCRIPT
+### ============================================
+### HƯỚNG DẪN:
+### 1. Chạy Test 2 -> Copy UUID từ response vào @uuid1
+### 2. Chạy Test 3 -> Copy UUID từ response vào @uuid2
+### 3. Chạy các test khác (4, 5, 6, 7, 8, 9)
+### ============================================
+
+@baseUrl = http://localhost:3000
+@uuid1 = 0ed06d26-9c99-4c4d-a4d5-82daf43b76f0
+@uuid2 = e22d3852-7b51-4265-8e82-286c8a74cc02
+
+###
+
+### ============================================
+### Test 1: Lấy danh sách tất cả chiến dịch
+### ============================================
+GET {{baseUrl}}/api/campaigns
+
+###
+
+### ============================================
+### Test 2: TẠO CHIẾN DỊCH MỚI (copy UUID vào @uuid1)
+### ============================================
+POST {{baseUrl}}/api/campaigns
+Content-Type: application/json
+
+{
+  "title": "Chiến dịch gây quỹ 2026",
+  "description": "Gây quỹ cho dự án cộng đồng phát triển bền vững",
+  "goalAmount": 50000,
+  "startDate": "2026-03-13",
+  "endDate": "2026-12-31"
+}
+
+###
+
+### ============================================
+### Test 3: TẠO CHIẾN DỊCH TỨ 2 (copy UUID vào @uuid2)
+### ============================================
+POST {{baseUrl}}/api/campaigns
+Content-Type: application/json
+
+{
+  "title": "Hỗ trợ giáo dục",
+  "description": "Chương trình hỗ trợ học sinh nghèo",
+  "goalAmount": 100000,
+  "startDate": "2026-03-13",
+  "endDate": "2026-06-30"
+}
+
+###
+
+### ============================================
+### Test 4: Lấy chi tiết chiến dịch 1
+### ============================================
+GET {{baseUrl}}/api/campaigns/{{uuid1}}
+
+###
+
+### ============================================
+### Test 5: Lấy chi tiết chiến dịch 2
+### ============================================
+GET {{baseUrl}}/api/campaigns/{{uuid2}}
+
+###
+
+### ============================================
+### Test 6: Cập nhật trạng thái chiến dịch 1
+### ============================================
+PUT {{baseUrl}}/api/campaigns/{{uuid1}}
+Content-Type: application/json
+
+{
+  "status": "completed",
+  "raisedAmount": 50000
+}
+
+###
+
+### ============================================
+### Test 7: Cập nhật số tiền chiến dịch 2
+### ============================================
+PUT {{baseUrl}}/api/campaigns/{{uuid2}}
+Content-Type: application/json
+
+{
+  "raisedAmount": 75000
+}
+
+###
+
+### ============================================
+### Test 8: Cập nhật tiêu đề chiến dịch 1
+### ============================================
+PUT {{baseUrl}}/api/campaigns/{{uuid1}}
+Content-Type: application/json
+
+{
+  "title": "Chiến dịch gây quỹ 2026 - Cập nhật"
+}
+
+###
+
+### ============================================
+### Test 9: Xóa chiến dịch 2
+### ============================================
+DELETE {{baseUrl}}/api/campaigns/{{uuid2}}
+
+###
+
+### ============================================
+### Test 10: Kiểm tra Health Check
+### ============================================
+GET {{baseUrl}}/api/health
+
+###
+
+### ============================================
+### WEBHOOK TESTS - THANH TOÁN
+### ============================================
+### Thay {{uuid1}} bằng UUID chiến dịch thực tế
+### ============================================
+
+### ============================================
+### Test 11: WEBHOOK NGÂN HÀNG - Nhận thanh toán 1
+### ============================================
+POST {{baseUrl}}/api/webhooks/bank
+Content-Type: application/json
+
+{
+  "transactionId": "TXN-2026-001",
+  "amount": 5000,
+  "campaignId": "{{uuid1}}",
+  "description": "Donation for campaign",
+  "senderName": "Nguyễn Văn A",
+  "senderAccount": "1234567890"
+}
+
+###
+
+### ============================================
+### Test 12: WEBHOOK NGÂN HÀNG - Nhận thanh toán 2
+### ============================================
+POST {{baseUrl}}/api/webhooks/bank
+Content-Type: application/json
+
+{
+  "transactionId": "TXN-2026-002",
+  "amount": 8000,
+  "campaignId": "{{uuid1}}",
+  "description": "Donation for campaign",
+  "senderName": "Trần Thị B",
+  "senderAccount": "9876543210"
+}
+
+###
+
+### ============================================
+### Test 13: WEBHOOK ETHEREUM - Nhận thanh toán on-chain
+### ============================================
+POST {{baseUrl}}/api/webhooks/ethereum
+Content-Type: application/json
+
+{
+  "transactionHash": "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+  "amount": 10000,
+  "campaignId": "{{uuid1}}",
+  "contractAddress": "0x1234567890123456789012345678901234567890",
+  "blockNumber": 15000000
+}
+
+###
+
+### ============================================
+### Test 14: Kiểm tra tổng tiền sau webhooks
+### ============================================
+GET {{baseUrl}}/api/campaigns/{{uuid1}}
