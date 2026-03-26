@@ -49,31 +49,47 @@ exports.getCampaignById = async (req, res) => {
 // Create campaign
 exports.createCampaign = async (req, res) => {
   try {
-    const { title, description, goalAmount, startDate, endDate, createdBy, qrCode, contractAddress } = req.body;
+    const {
+      title,
+      description,
+      goal_amount,
+      raised_amount,
+      qr_code,
+      category_id,
+      beneficiary_id,
+      start_date,
+      end_date,
+      status,
+      created_by
+    } = req.body;
 
-    // Validation
-    if (!title || !description || !goalAmount || !startDate || !endDate) {
+    // Validation theo schema mới (snake_case)
+    if (!title || !description || !goal_amount || !start_date || !end_date) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields: title, description, goalAmount, startDate, endDate'
+        error: 'Missing required fields: title, description, goal_amount, start_date, end_date'
       });
     }
 
-    if (isNaN(goalAmount) || goalAmount <= 0) {
+    if (isNaN(goal_amount) || goal_amount <= 0) {
       return res.status(400).json({
         success: false,
-        error: 'Goal amount must be a positive number'
+        error: 'goal_amount must be a positive number'
       });
     }
 
     const campaignData = {
       title,
       description,
-      goalAmount: parseFloat(goalAmount),
-      startDate,
-      endDate,
-      qrCode,
-      contractAddress
+      goal_amount: parseFloat(goal_amount),
+      raised_amount: raised_amount !== undefined ? parseFloat(raised_amount) : 0,
+      qr_code: qr_code || null,
+      category_id: category_id ? parseInt(category_id) : null,
+      beneficiary_id: beneficiary_id || null,
+      start_date,
+      end_date,
+      status: status || 'Đang chạy',
+      created_by: created_by || null
     };
 
     const newCampaign = await createCampaign(campaignData);

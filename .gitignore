@@ -1,1 +1,39 @@
+# --- Node.js & Dependencies ---
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+yarn.lock
+
+# --- Environment Configuration ---
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# --- Hardhat / Blockchain ---
+blockchain/cache/
+blockchain/artifacts/
+blockchain/typechain-types/
+blockchain/coverage/
+blockchain/coverage.json
+blockchain/gasReporterOutput.json
+
+# --- OS / Editor ---
+.DS_Store
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# --- Build & Temporary Files ---
+dist/
+build/
+coverage/
+.nyc_output/
+*.log
 test.http

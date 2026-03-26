@@ -1,6 +1,6 @@
 const supabase = require('../config/supabase');
 
-const TABLE_NAME = 'campaigns'; // Tên bảng trong Supabase
+const TABLE_NAME = 'campaigns';
 
 // Get all campaigns
 const getAllCampaigns = async () => {
@@ -35,32 +35,45 @@ const getCampaignById = async (id) => {
   }
 };
 
-// Create new campaign
+// Create new campaign — toàn bộ field theo schema Supabase (snake_case)
 const createCampaign = async (campaignData) => {
   try {
-    const { title, description, goalAmount, startDate, endDate, qrCode, contractAddress } = campaignData;
+    const {
+      title,
+      description,
+      goal_amount,
+      raised_amount,
+      qr_code,
+      category_id,
+      beneficiary_id,
+      start_date,
+      end_date,
+      status,
+      created_by
+    } = campaignData;
 
-    // Validation
-    if (!title || !description || !goalAmount || !startDate || !endDate) {
-      throw new Error('Missing required fields: title, description, goalAmount, startDate, endDate');
+    // Server-side validation
+    if (!title || !description || !goal_amount || !start_date || !end_date) {
+      throw new Error('Missing required fields: title, description, goal_amount, start_date, end_date');
     }
 
-    if (goalAmount <= 0) {
-      throw new Error('Goal amount must be greater than 0');
+    if (goal_amount <= 0) {
+      throw new Error('goal_amount must be greater than 0');
     }
 
     const newCampaign = {
       title,
       description,
-      goal_amount: parseFloat(goalAmount),
-      raised_amount: 0,
-      start_date: startDate,
-      end_date: endDate,
-      status: 'active'
+      goal_amount: parseFloat(goal_amount),
+      raised_amount: raised_amount !== undefined ? parseFloat(raised_amount) : 0,
+      qr_code: qr_code || null,
+      category_id: category_id ? parseInt(category_id) : null,
+      beneficiary_id: beneficiary_id || null,
+      start_date,
+      end_date,
+      status: status || 'Đang chạy',
+      created_by: created_by || null
     };
-
-    if (qrCode) newCampaign.qr_code = qrCode;
-    if (contractAddress) newCampaign.contract_address = contractAddress;
 
     const { data, error } = await supabase
       .from(TABLE_NAME)
@@ -76,26 +89,33 @@ const createCampaign = async (campaignData) => {
   }
 };
 
-// Update campaign
+// Update campaign — chấp nhận đúng tên field snake_case
 const updateCampaign = async (id, updateData) => {
   try {
-    // Kiểm tra campaign tồn tại
     const campaign = await getCampaignById(id);
     if (!campaign) {
       throw new Error('Campaign not found');
     }
 
-    // Map frontend field names to database field names
+    // Chỉ update những field được gửi lên (snake_case trực tiếp)
+    const allowedFields = [
+      'title', 'description',
+      'goal_amount', 'raised_amount',
+      'qr_code', 'category_id', 'beneficiary_id',
+      'start_date', 'end_date',
+      'status', 'created_by'
+    ];
+
     const mappedData = {};
-    if (updateData.title) mappedData.title = updateData.title;
-    if (updateData.description) mappedData.description = updateData.description;
-    if (updateData.goalAmount !== undefined) mappedData.goal_amount = updateData.goalAmount;
-    if (updateData.raisedAmount !== undefined) mappedData.raised_amount = updateData.raisedAmount;
-    if (updateData.startDate) mappedData.start_date = updateData.startDate;
-    if (updateData.endDate) mappedData.end_date = updateData.endDate;
-    if (updateData.status) mappedData.status = updateData.status;
-    if (updateData.qrCode) mappedData.qr_code = updateData.qrCode;
-    if (updateData.contractAddress) mappedData.contract_address = updateData.contractAddress;
+    allowedFields.forEach(field => {
+      if (updateData[field] !== undefined) {
+        mappedData[field] = updateData[field];
+      }
+    });
+
+    if (Object.keys(mappedData).length === 0) {
+      throw new Error('No valid fields to update');
+    }
 
     const { data, error } = await supabase
       .from(TABLE_NAME)
