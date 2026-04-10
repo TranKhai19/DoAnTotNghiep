@@ -2,6 +2,8 @@ const { fundChainContract } = require('../config/chain');
 const { ethers } = require('ethers');
 let socketService = null;
 try { socketService = require('./socketService'); } catch (e) { /* ok if not available */ }
+let donationModel = null;
+try { donationModel = require('../models/Donation'); } catch (e) { donationModel = null; }
 
 async function createCampaign(targetAmount) {
   const tx = await fundChainContract.createCampaign(ethers.BigNumber.from(targetAmount));
@@ -22,6 +24,22 @@ async function recordDonation(campaignId, bankRef, amount, donor) {
   try {
     if (socketService) socketService.getIo().emit('onchain:recordDonation', { transactionHash: receipt.transactionHash, campaignId: campaignId.toString(), bankRef, amount: amount.toString(), donor });
   } catch (e) { console.error('Socket emit failed', e); }
+  // Persist donation to DB (best-effort)
+  try {
+    if (donationModel) {
+      await donationModel.createDonation({
+        campaign_id: campaignId,
+        bank_ref: bankRef,
+        amount,
+        donor,
+        transaction_hash: receipt.transactionHash,
+        timestamp: new Date().toISOString()
+      });
+    }
+  } catch (e) {
+    console.warn('Could not persist donation to DB:', e.message || e);
+  }
+
   return receipt;
 }
 

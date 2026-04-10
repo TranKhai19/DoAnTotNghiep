@@ -60,3 +60,113 @@ Các biến môi trường cần thiết (thêm vào `server/.env`, xem `server/
 - `FUNDCHAIN_CONTRACT_ADDRESS` — địa chỉ hợp đồng FundChain đã được deploy
 
 Sau khi thiết lập các biến môi trường, khởi động server và gọi các endpoint on-chain (tạo chiến dịch, ghi nhận quyên góp, giải ngân, đóng chiến dịch). Server sẽ ký và gửi giao dịch bằng private key đã cung cấp.
+
+## Beneficiaries API (CRUD + Cloudinary image upload)
+
+Dự án đã bổ sung REST API quản lý người thụ hưởng (beneficiaries) kèm upload ảnh lên Cloudinary. API được triển khai trong thư mục `server` và mount tại `/api/beneficiaries`.
+
+Tóm tắt nhanh
+
+- Routes: `/api/beneficiaries`
+- Tính năng: Create / Read / Update / Delete beneficiaries; upload file ảnh lên Cloudinary; lưu `image_url` và `image_public_id`.
+
+Các file chính
+
+- `server/models/Beneficiary.js` — logic CRUD (Supabase). Có fallback in-memory cho môi trường phát triển.
+- `server/controllers/beneficiaryController.js` — xử lý HTTP, upload ảnh, xóa ảnh cũ khi cập nhật/xóa.
+- `server/routes/beneficiaries.js` — routes Express (dùng `multer` để nhận multipart uploads). Tên field ảnh: `image`.
+- `server/config/cloudinary.js` — cấu hình Cloudinary (đọc từ `.env`).
+- `server/db/migrations/001_create_beneficiaries.sql` — SQL mẫu tạo bảng `beneficiaries`.
+
+Biến môi trường (thêm vào `server/.env`)
+
+- `SUPABASE_URL` — URL Supabase
+- `SUPABASE_KEY` — Supabase anon/service key
+- `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` — Cloudinary credentials
+ - `BANK_WEBHOOK_SECRET` — (optional) shared secret to verify webhook requests from the virtual bank. Server expects HMAC-SHA256 of the JSON body in header `x-bank-signature`.
+ - `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` — Cloudinary credentials
+ - `BANK_WEBHOOK_SECRET` — (tuỳ chọn) khóa bí mật dùng để xác thực webhook từ ngân hàng ảo. Server sẽ kiểm tra HMAC-SHA256 của nội dung JSON gửi trong header `x-bank-signature`.
+
+Endpoints
+
+- GET /api/beneficiaries — lấy danh sách
+- GET /api/beneficiaries/:id — lấy 1 beneficiary
+- POST /api/beneficiaries — tạo (multipart/form-data), field ảnh: `image`
+- PUT /api/beneficiaries/:id — cập nhật (hỗ trợ multipart để thay ảnh)
+- DELETE /api/beneficiaries/:id — xóa (cũng xóa ảnh trên Cloudinary nếu có)
+
+Ví dụ (curl) — tạo beneficiary kèm ảnh:
+
+```bash
+curl -X POST http://localhost:3000/api/beneficiaries \
+  -F "name=Nguyen Van Test" \
+  -F "email=test@example.com" \
+  -F "image=@/full/path/to/photo.jpg"
+```
+
+Ghi chú
+
+- Code có fallback in-memory khi Supabase chưa cấu hình, giúp test nhanh local. Để dùng Supabase thật, chạy migration SQL trong Supabase và cập nhật `SUPABASE_URL`/`SUPABASE_KEY` trong `server/.env`.
+- Ảnh upload lưu `image_url` và `image_public_id`. Khi cập nhật hoặc xóa, ảnh cũ sẽ bị xóa khỏi Cloudinary (nếu có `public_id`).
+
+## Webhook: Bank webhook testing
+
+Server cung cấp các route webhook tại `/api/webhooks`.
+
+- `POST /api/webhooks/bank` — endpoint dạng production. Handler sẽ (tuỳ chọn) kiểm tra chữ ký HMAC, kiểm tra tồn tại campaign trong Supabase, cập nhật `raised_amount` cho campaign, lưu transaction và phát sự kiện socket.
+- `POST /api/webhooks/bank/test` — endpoint dành cho test (demo local). Endpoint này bỏ qua bước kiểm tra tồn tại campaign nhưng vẫn lưu transaction (nếu DB có) và phát sự kiện socket. Dùng khi bạn chưa có dữ liệu campaign trong Supabase nhưng vẫn muốn thử luồng webhook.
+
+Payload example (JSON):
+
+```json
+{
+  "transactionId": "tx-123",
+  "amount": 100.5,
+  "campaignId": 1,
+  "description": "Payment from virtual bank",
+  "timestamp": "2026-04-04T10:00:00Z",
+  "senderName": "Nguyen A",
+  "senderAccount": "12345678"
+}
+```
+
+Yêu cầu thử không có chữ ký (dùng cho `/bank/test`):
+
+```bash
+curl -X POST http://localhost:3000/api/webhooks/bank/test \
+  -H "Content-Type: application/json" \
+  -d '{"transactionId":"tx-test-001","amount":55.5,"campaignId":999,"description":"Demo no-check","timestamp":"2026-04-04T10:00:00Z","senderName":"Demo","senderAccount":"000111"}'
+```
+
+Yêu cầu có chữ ký (production) — HMAC-SHA256
+
+Nếu bạn đã thiết lập `BANK_WEBHOOK_SECRET` trong `server/.env`, server sẽ kiểm tra chữ ký gửi trong header `x-bank-signature`. Chữ ký là giá trị hex của HMAC-SHA256 tính trên nội dung JSON thô bằng khóa chia sẻ.
+
+Tạo chữ ký và gửi bằng curl (Linux/macOS hoặc Git Bash trên Windows):
+
+```bash
+BODY='{"transactionId":"tx-123","amount":100.5,"campaignId":1}'
+SIGNATURE=$(printf "%s" "$BODY" | openssl dgst -sha256 -hmac "YOUR_BANK_WEBHOOK_SECRET" -binary | xxd -p -c 256)
+curl -X POST http://localhost:3000/api/webhooks/bank \
+  -H "Content-Type: application/json" \
+  -H "x-bank-signature: $SIGNATURE" \
+  -d "$BODY"
+```
+
+Hoặc tạo chữ ký trong PowerShell (Windows):
+
+```powershell
+$body = '{"transactionId":"tx-123","amount":100.5,"campaignId":1}'
+$secret = 'YOUR_BANK_WEBHOOK_SECRET'
+$hmac = New-Object System.Security.Cryptography.HMACSHA256([System.Text.Encoding]::UTF8.GetBytes($secret))
+$hash = $hmac.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($body))
+$signature = ($hash | ForEach-Object { $_.ToString('x2') }) -join ''
+Invoke-RestMethod -Uri 'http://localhost:3000/api/webhooks/bank' -Method POST -Body $body -ContentType 'application/json' -Headers @{ 'x-bank-signature' = $signature }
+```
+
+Notes
+
+- Use `/bank/test` for local demos where campaigns table is absent or you want to bypass campaign validation.
+- `/bank` performs campaign existence check and updates campaign; it requires a valid Supabase setup to fully exercise.
+
+

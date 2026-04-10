@@ -3,7 +3,9 @@ const express = require('express');
 const http = require('http');
 const campaignRoutes = require('./routes/campaigns');
 const webhookRoutes = require('./routes/webhooks');
+const beneficiaryRoutes = require('./routes/beneficiaries');
 const socketService = require('./services/socketService');
+const notifyRoutes = require('./routes/notify');
 
 const app = express();
 
@@ -23,6 +25,8 @@ app.get('/api/health', (req, res) => {
 // API Routes
 app.use('/api/campaigns', campaignRoutes);
 app.use('/api/webhooks', webhookRoutes);
+app.use('/api/beneficiaries', beneficiaryRoutes);
+app.use('/api/notify', notifyRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

@@ -1,7 +1,19 @@
 const express = require('express');
 const router = express.Router();
 const campaignController = require('../controllers/campaignController');
-const contractController = require('../controllers/contractController');
+let contractController;
+try {
+	contractController = require('../controllers/contractController');
+} catch (e) {
+	// If on-chain config is missing, provide stub handlers that return 501
+	contractController = {
+		createCampaignOnChain: (req, res) => res.status(501).json({ success: false, error: 'On-chain features not configured' }),
+		getCampaignOnChain: (req, res) => res.status(501).json({ success: false, error: 'On-chain features not configured' }),
+		recordDonationOnChain: (req, res) => res.status(501).json({ success: false, error: 'On-chain features not configured' }),
+		disburseFundsOnChain: (req, res) => res.status(501).json({ success: false, error: 'On-chain features not configured' }),
+		closeCampaignOnChain: (req, res) => res.status(501).json({ success: false, error: 'On-chain features not configured' })
+	};
+}
 
 // On-chain FundChain contract endpoints
 router.post('/onchain', contractController.createCampaignOnChain);
