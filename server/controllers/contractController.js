@@ -1,4 +1,3 @@
-const { ethers } = require('ethers');
 const contractService = require('../services/contractService');
 
 exports.createCampaignOnChain = async (req, res) => {
@@ -8,9 +7,15 @@ exports.createCampaignOnChain = async (req, res) => {
       return res.status(400).json({ success: false, error: 'targetAmount must be a positive number' });
     }
 
-    const receipt = await contractService.createCampaign(targetAmount);
+    const result = await contractService.createCampaign(targetAmount);
 
-    return res.status(201).json({ success: true, message: 'Campaign created on-chain', transactionHash: receipt.transactionHash });
+    return res.status(201).json({
+      success: true,
+      message: 'Campaign created on-chain',
+      transactionHash: result.transactionHash,
+      gasEstimate: result.gasEstimate,
+      gasWarning: result.gasEstimate?.warning || false
+    });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, error: error.message });
@@ -44,9 +49,15 @@ exports.recordDonationOnChain = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Missing donation parameters' });
     }
 
-    const receipt = await contractService.recordDonation(campaignId, bankRef, amount, donor);
+    const result = await contractService.recordDonation(campaignId, bankRef, amount, donor);
 
-    return res.status(200).json({ success: true, message: 'Donation recorded on-chain', transactionHash: receipt.transactionHash });
+    return res.status(200).json({
+      success: true,
+      message: 'Donation recorded on-chain',
+      transactionHash: result.transactionHash,
+      gasEstimate: result.gasEstimate,
+      gasWarning: result.gasEstimate?.warning || false
+    });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, error: error.message });
@@ -65,9 +76,15 @@ exports.disburseFundsOnChain = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Missing disbursement parameters' });
     }
 
-    const receipt = await contractService.disburseFunds(campaignId, amount, beneficiaryId);
+    const result = await contractService.disburseFunds(campaignId, amount, beneficiaryId);
 
-    return res.status(200).json({ success: true, message: 'Funds disbursed on-chain', transactionHash: receipt.transactionHash });
+    return res.status(200).json({
+      success: true,
+      message: 'Funds disbursed on-chain',
+      transactionHash: result.transactionHash,
+      gasEstimate: result.gasEstimate,
+      gasWarning: result.gasEstimate?.warning || false
+    });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, error: error.message });
@@ -81,11 +98,34 @@ exports.closeCampaignOnChain = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Invalid campaignId' });
     }
 
-    const receipt = await contractService.closeCampaign(campaignId);
+    const result = await contractService.closeCampaign(campaignId);
 
-    return res.status(200).json({ success: true, message: 'Campaign closed on-chain', transactionHash: receipt.transactionHash });
+    return res.status(200).json({
+      success: true,
+      message: 'Campaign closed on-chain',
+      transactionHash: result.transactionHash,
+      gasEstimate: result.gasEstimate,
+      gasWarning: result.gasEstimate?.warning || false
+    });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+exports.estimateAdminGas = async (req, res) => {
+  try {
+    const { action, params } = req.body;
+    const estimate = await contractService.estimateAdminActionGas(action, params || {});
+
+    return res.status(200).json({
+      success: true,
+      action,
+      data: estimate,
+      gasWarning: estimate.warning
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(400).json({ success: false, error: error.message });
   }
 };
