@@ -7,7 +7,10 @@
     "start": "node app.js",
     "dev": "node --watch app.js",
     "test": "jest --config jest.config.js --forceExit",
-    "test:watch": "jest --config jest.config.js --watch --forceExit"
+    "test:watch": "jest --config jest.config.js --watch --forceExit",
+    "db:migrate": "node scripts/runMigrations.js",
+    "db:seed": "node scripts/runSeeders.js",
+    "db:sync": "node scripts/syncDatabase.js"
   },
   "keywords": [
     "express",
@@ -23,6 +26,7 @@
     "ethers": "^6.16.0",
     "express": "^4.22.1",
     "jsonwebtoken": "^9.0.3",
+    "pg": "^8.20.0",
     "socket.io": "^4.8.1"
   },
   "devDependencies": {
@@ -35,6 +39,5 @@
     "supertest": "^7.2.2",
     "typescript": "~5.8.0",
     "viem": "^2.47.6"
-  },
-  "type": "commonjs"
+  }
 }

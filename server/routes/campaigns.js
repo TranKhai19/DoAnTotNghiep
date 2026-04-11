@@ -5,6 +5,7 @@ const contractController = require('../controllers/contractController');
 
 // On-chain FundChain contract endpoints
 router.post('/onchain', contractController.createCampaignOnChain);
+router.post('/onchain/estimate', contractController.estimateAdminGas);
 router.get('/onchain/:id', contractController.getCampaignOnChain);
 router.post('/onchain/:campaignId/donate', contractController.recordDonationOnChain);
 router.post('/onchain/:campaignId/disburse', contractController.disburseFundsOnChain);
