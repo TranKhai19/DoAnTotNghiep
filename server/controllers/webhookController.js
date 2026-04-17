@@ -1,4 +1,5 @@
 const supabase = require('../config/supabase');
+const { addWebhookJob } = require('../services/queueService');
 
 // Webhook từ ngân hàng - Nhận dữ liệu thanh toán
 exports.bankWebhook = async (req, res) => {
@@ -42,35 +43,28 @@ exports.bankWebhook = async (req, res) => {
       });
     }
 
-    // Cập nhật số tiền gây quỹ
-    const currentRaisedAmount = campaign.raised_amount || 0;
-    const newRaisedAmount = currentRaisedAmount + parseFloat(amount);
+    // Thêm job vào queue thay vì xử lý trực tiếp
+    const job = await addWebhookJob({
+      transactionId,
+      amount: parseFloat(amount),
+      campaignId,
+      description: description || null,
+      senderName: senderName || null,
+      senderAccount: senderAccount || null
+    });
 
-    const { data: updatedCampaign, error: updateError } = await supabase
-      .from('campaigns')
-      .update({
-        raised_amount: newRaisedAmount
-      })
-      .eq('id', campaignId)
-      .select()
-      .single();
+    console.log(`📝 Webhook queued: Transaction ${transactionId}, Job ID: ${job.id}`);
 
-    if (updateError) throw updateError;
-
-    // Log giao dịch (tuỳ chọn - lưu vào bảng transactions nếu có)
-    console.log(`✅ Webhook received: Transaction ${transactionId}, Amount: ${amount}, Campaign: ${campaignId}`);
-
-    res.status(200).json({
+    res.status(202).json({
       success: true,
-      message: 'Payment received successfully',
+      message: 'Payment queued for processing',
+      jobId: job.id,
       data: {
         transactionId,
         amount: parseFloat(amount),
         campaignId,
-        previousAmount: currentRaisedAmount,
-        newAmount: newRaisedAmount,
         campaignTitle: campaign.title,
-        timestamp: new Date().toISOString()
+        queuedAt: new Date().toISOString()
       }
     });
 

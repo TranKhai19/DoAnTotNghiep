@@ -7,7 +7,8 @@ const webhookRoutes = require('./routes/webhooks');
 const authRoutes = require('./routes/authRoutes');
 
 const socketService = require('./services/socketService');
-
+const { initWebhookProcessor } = require('./services/queueService');
+const { processBankWebhook } = require('./services/webhookProcessingService');
 
 const app = express();
 
@@ -77,6 +78,14 @@ try {
 } catch (err) {
   // If chain config throws due to missing env, just log — server should still run for non-chain flows
   console.warn('Could not attach contract event listeners:', err.message);
+}
+
+// Initialize webhook queue processor
+try {
+  initWebhookProcessor(processBankWebhook);
+  console.log('✅ Webhook queue processor initialized');
+} catch (err) {
+  console.warn('⚠️  Could not initialize webhook queue processor:', err.message);
 }
 
 server.listen(PORT, () => {
