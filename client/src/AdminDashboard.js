@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Routes, Route, Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 import './AdminDashboard.css';
+import StaffCampaignPosts from './pages/admin/StaffCampaignPosts';
 
 const AdminSidebar = ({ role }) => {
   const location = useLocation();
@@ -33,7 +34,7 @@ const AdminSidebar = ({ role }) => {
         {role === 'staff' && (
           <>
             <Link to="/admin/campaign-posts" className={`admin-nav-item ${isActive('/admin/campaign-posts')}`}>
-              <span className="icon">📝</span> Quản lý bài viết
+              <span className="icon">📝</span> Chiến dịch của tôi
             </Link>
             <Link to="/admin/reports" className={`admin-nav-item ${isActive('/admin/reports')}`}>
               <span className="icon">📉</span> Báo cáo
@@ -483,12 +484,7 @@ const PersonnelManagement = () => {
   )
 };
 
-const StaffCampaignPosts = () => (
-  <div className="admin-page fade-in">
-     <h2 className="mb-8">Quản lý bài viết chiến dịch</h2>
-     <p className="text-muted">Tính năng dành riêng cho Staff đang được phát triển...</p>
-  </div>
-);
+// StaffCampaignPosts is now imported from ./pages/admin/StaffCampaignPosts
 
 const StaffReports = () => (
   <div className="admin-page fade-in">
@@ -547,7 +543,7 @@ const AdminDashboard = () => {
             {/* Staff Routes */}
             {role === 'staff' && (
               <>
-                <Route path="/campaign-posts" element={<StaffCampaignPosts />} />
+                <Route path="/campaign-posts" element={<StaffCampaignPosts user={user} />} />
                 <Route path="/reports" element={<StaffReports />} />
               </>
             )}
