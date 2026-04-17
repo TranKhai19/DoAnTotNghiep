@@ -274,18 +274,29 @@ exports.getDrafts = async (req, res) => {
 exports.approveDraft = async (req, res) => {
   try {
     const { id } = req.params;
-    const approvedCampaign = await approveCampaign(id);
+    const result = await approveCampaign(id);
 
     res.json({
       success: true,
-      message: 'Campaign approved and published successfully',
-      data: approvedCampaign
+      message: 'Campaign approved, published successfully & minted on blockchain',
+      data: {
+        campaign: result.campaign,
+        blockchain: result.blockchain
+      }
     });
   } catch (error) {
     if (error.message.includes('not found') || error.message.includes('not draft')) {
       return res.status(400).json({
         success: false,
         error: error.message
+      });
+    }
+
+    if (error.message.includes('blockchain') || error.message.includes('Blockchain')) {
+      return res.status(502).json({
+        success: false,
+        error: error.message,
+        message: 'Blockchain operation failed'
       });
     }
 

@@ -1,13 +1,14 @@
 {
 	"info": {
 		"_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-		"name": "DoAnTotNghiep API v2",
-		"description": "Collection test đầy đủ theo schema mới của bảng campaigns (Supabase).\nBao gồm: Health, Auth, Campaigns CRUD, Webhooks.\n\nBiến môi trường cần thiết:\n- baseUrl: http://localhost:3000\n- campaignId: (uuid - tự điền sau khi Create Campaign)\n- authToken: (Supabase access_token - tự điền sau khi Login)",
+		"name": "DoAnTotNghiep API v3",
+		"description": "Collection test đầy đủ Priority 1 Implementation:\n- Health Check\n- Authentication (Register, Login, Logout)\n- Campaigns CRUD (Old)\n- Draft Mode NEW (Create, Update, List, Approve, Reject)\n- Webhooks (Bank, Ethereum, Test)\n- Queue Integration (Async webhook processing)\n\nBiến môi trường cần thiết:\n- baseUrl: http://localhost:3000\n- campaignId: (uuid - tự điền sau khi Create Campaign)\n- draftCampaignId: (uuid - tự điền sau khi Create Draft)\n- authToken: (JWT token từ login - tự điền hoặc auto từ login endpoint)",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"variable": [
 		{ "key": "baseUrl",    "value": "http://localhost:3000", "type": "string" },
 		{ "key": "campaignId", "value": "REPLACE_WITH_REAL_UUID", "type": "string" },
+		{ "key": "draftCampaignId", "value": "REPLACE_WITH_DRAFT_UUID", "type": "string" },
 		{ "key": "authToken",  "value": "",                      "type": "string" }
 	],
 	"item": [
@@ -339,6 +340,203 @@
 						"header": [{ "key": "Content-Type", "value": "application/json" }],
 						"body": { "mode": "raw", "raw": "{\n  \"amount\": 100,\n  \"campaignId\": \"{{campaignId}}\"\n}" },
 						"url": { "raw": "{{baseUrl}}/api/webhooks/ethereum", "host": ["{{baseUrl}}"], "path": ["api","webhooks","ethereum"] }
+					}
+				}
+			]
+		},
+
+		{
+			"name": "5. Draft Mode - PRIORITY 1 ✅",
+			"description": "Test Draft Mode workflow: Create → Update → Review → Approve/Reject",
+			"item": [
+				{
+					"name": "POST /api/campaigns/draft/create - Tạo bản nháp",
+					"event": [{ "listen": "test", "script": { "exec": [
+						"pm.test('Status 201', () => pm.response.to.have.status(201));",
+						"const json = pm.response.json();",
+						"pm.test('success = true', () => pm.expect(json.success).to.be.true);",
+						"pm.test('Có data', () => pm.expect(json.data).to.exist);",
+						"if (json.data && json.data.id) {",
+						"  pm.collectionVariables.set('draftCampaignId', json.data.id);",
+						"  pm.test('Campaign ID được lưu', () => pm.expect(json.data.id).to.be.a('string'));",
+						"}",
+						"pm.test('status = draft', () => pm.expect(json.data.status).to.eql('draft'));"
+					], "type": "text/javascript" }}],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{authToken}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"[DRAFT] Chiến dịch cứu trợ khẩn cấp 2026\",\n  \"description\": \"Giúp đỡ cộng đồng bị ảnh hưởng bởi thảm họa tự nhiên. Đây là bản nháp, cần duyệt từ Admin trước khi công bố.\",\n  \"goal_amount\": 75000000,\n  \"qr_code\": \"https://example.com/qr/draft_campaign.png\",\n  \"category_id\": 5,\n  \"beneficiary_id\": null\n}"
+						},
+						"url": { "raw": "{{baseUrl}}/api/campaigns/draft/create", "host": ["{{baseUrl}}"], "path": ["api","campaigns","draft","create"] }
+					}
+				},
+				{
+					"name": "POST /api/campaigns/draft/create - Thiếu title (400)",
+					"event": [{ "listen": "test", "script": { "exec": [
+						"pm.test('Status 400', () => pm.response.to.have.status(400));",
+						"pm.test('success = false', () => pm.expect(pm.response.json().success).to.be.false);"
+					], "type": "text/javascript" }}],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{authToken}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"description\": \"Thiếu title\",\n  \"goal_amount\": 1000\n}"
+						},
+						"url": { "raw": "{{baseUrl}}/api/campaigns/draft/create", "host": ["{{baseUrl}}"], "path": ["api","campaigns","draft","create"] }
+					}
+				},
+				{
+					"name": "PATCH /api/campaigns/draft/:id - Cập nhật bản nháp",
+					"event": [{ "listen": "test", "script": { "exec": [
+						"pm.test('Status 200', () => pm.response.to.have.status(200));",
+						"pm.test('success = true', () => pm.expect(pm.response.json().success).to.be.true);",
+						"pm.test('title cập nhật', () => pm.expect(pm.response.json().data.title).to.include('[CẬP NHẬT]'));"
+					], "type": "text/javascript" }}],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{authToken}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"[CẬP NHẬT] Chiến dịch cứu trợ khẩn cấp 2026\",\n  \"start_date\": \"2026-04-20T00:00:00Z\",\n  \"end_date\": \"2026-05-20T00:00:00Z\",\n  \"goal_amount\": 100000000\n}"
+						},
+						"url": { "raw": "{{baseUrl}}/api/campaigns/draft/{{draftCampaignId}}", "host": ["{{baseUrl}}"], "path": ["api","campaigns","draft","{{draftCampaignId}}"] }
+					}
+				},
+				{
+					"name": "GET /api/campaigns/draft/list - Xem danh sách draft (Admin only)",
+					"event": [{ "listen": "test", "script": { "exec": [
+						"pm.test('Status 200 hoặc 403', () => pm.expect([200,403]).to.include(pm.response.code));",
+						"if (pm.response.code === 200) {",
+						"  const json = pm.response.json();",
+						"  pm.test('response là object', () => pm.expect(json).to.be.an('object'));",
+						"  pm.test('Có property data', () => pm.expect(json).to.have.property('data'));",
+						"  pm.test('data là array', () => pm.expect(json.data).to.be.an('array'));",
+						"  if (json.data.length > 0) {",
+						"    pm.test('Draft campaigns có status = draft', () => pm.expect(json.data[0].status).to.eql('draft'));",
+						"  }",
+						"} else if (pm.response.code === 403) {",
+						"  pm.test('Lỗi 403 Forbidden - token không phải admin', () => pm.expect(pm.response.json().error).to.include('Access denied'));",
+						"}"
+					], "type": "text/javascript" }}],
+					"request": {
+						"method": "GET",
+						"header": [{ "key": "Authorization", "value": "Bearer {{authToken}}" }],
+						"url": { "raw": "{{baseUrl}}/api/campaigns/draft/list", "host": ["{{baseUrl}}"], "path": ["api","campaigns","draft","list"] }
+					}
+				},
+				{
+					"name": "GET /api/campaigns/draft/list - Không có token (401)",
+					"event": [{ "listen": "test", "script": { "exec": [
+						"pm.test('Status 401', () => pm.response.to.have.status(401));",
+						"pm.test('Có lỗi unauthorized', () => pm.expect(pm.response.json().error).to.include('Authentication'));"
+					], "type": "text/javascript" }}],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": { "raw": "{{baseUrl}}/api/campaigns/draft/list", "host": ["{{baseUrl}}"], "path": ["api","campaigns","draft","list"] }
+					}
+				},
+				{
+					"name": "POST /api/campaigns/draft/:id/approve - Admin duyệt draft",
+					"event": [{ "listen": "test", "script": { "exec": [
+						"pm.test('Status 200 hoặc 400 hoặc 403', () => pm.expect([200,400,403]).to.include(pm.response.code));",
+						"if (pm.response.code === 200) {",
+						"  const json = pm.response.json();",
+						"  pm.test('success = true', () => pm.expect(json.success).to.be.true);",
+						"  pm.test('status = published', () => pm.expect(json.data.status).to.eql('published'));",
+						"  pm.test('Có approved_at', () => pm.expect(json.data.approved_at).to.exist);",
+						"}",
+						"if (pm.response.code === 403) {",
+						"  pm.test('Lỗi 403 - chỉ admin mới duyệt được', () => pm.expect(pm.response.json().error).to.include('Access denied'));",
+						"}"
+					], "type": "text/javascript" }}],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{authToken}}" }
+						],
+						"body": { "mode": "raw", "raw": "{}" },
+						"url": { "raw": "{{baseUrl}}/api/campaigns/draft/{{draftCampaignId}}/approve", "host": ["{{baseUrl}}"], "path": ["api","campaigns","draft","{{draftCampaignId}}","approve"] }
+					}
+				},
+				{
+					"name": "POST /api/campaigns/draft/:id/reject - Admin từ chối draft",
+					"event": [{ "listen": "test", "script": { "exec": [
+						"pm.test('Status 200 hoặc 400 hoặc 403', () => pm.expect([200,400,403]).to.include(pm.response.code));",
+						"if (pm.response.code === 200) {",
+						"  const json = pm.response.json();",
+						"  pm.test('success = true', () => pm.expect(json.success).to.be.true);",
+						"  pm.test('status = rejected', () => pm.expect(json.data.status).to.eql('rejected'));",
+						"  pm.test('Có rejected_at', () => pm.expect(json.data.rejected_at).to.exist);",
+						"  pm.test('Có rejection_reason', () => pm.expect(json.data.rejection_reason).to.equal('Thiếu thông tin chi tiết'));",
+						"}"
+					], "type": "text/javascript" }}],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Authorization", "value": "Bearer {{authToken}}" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"reason\": \"Thiếu thông tin chi tiết\"\n}"
+						},
+						"url": { "raw": "{{baseUrl}}/api/campaigns/draft/{{draftCampaignId}}/reject", "host": ["{{baseUrl}}"], "path": ["api","campaigns","draft","{{draftCampaignId}}","reject"] }
+					}
+				}
+			]
+		},
+
+		{
+			"name": "6. Queue Integration - PRIORITY 1 ✅",
+			"description": "Test async webhook processing với Redis + Bull queue",
+			"item": [
+				{
+					"name": "POST /api/webhooks/bank - 202 Accepted (queued)",
+					"event": [{ "listen": "test", "script": { "exec": [
+						"pm.test('Status 202 (Accepted)', () => pm.response.to.have.status(202));",
+						"const json = pm.response.json();",
+						"pm.test('success = true', () => pm.expect(json.success).to.be.true);",
+						"pm.test('jobId được trả về', () => pm.expect(json.jobId).to.exist);",
+						"pm.test('Message = queued', () => pm.expect(json.message).to.include('Payment queued'));"
+					], "type": "text/javascript" }}],
+					"request": {
+						"method": "POST",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"transactionId\": \"QUEUE_TEST_{{$randomInt}}\",\n  \"amount\": 750000,\n  \"campaignId\": \"{{campaignId}}\",\n  \"description\": \"Test queue async processing\",\n  \"senderName\": \"Queue Tester\",\n  \"senderAccount\": \"ACC-QUEUE-001\"\n}"
+						},
+						"url": { "raw": "{{baseUrl}}/api/webhooks/bank", "host": ["{{baseUrl}}"], "path": ["api","webhooks","bank"] }
+					}
+				},
+				{
+					"name": "POST /api/webhooks/bank - Job retry khi fail",
+					"description": "Webhook này test failed campaign - job sẽ retry 3 lần",
+					"event": [{ "listen": "test", "script": { "exec": [
+						"pm.test('Status 202 hoặc 404', () => pm.expect([202,404]).to.include(pm.response.code));"
+					], "type": "text/javascript" }}],
+					"request": {
+						"method": "POST",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"transactionId\": \"RETRY_TEST_{{$randomInt}}\",\n  \"amount\": 500000,\n  \"campaignId\": \"00000000-0000-0000-0000-000000000000\",\n  \"senderName\": \"Retry Tester\"\n}"
+						},
+						"url": { "raw": "{{baseUrl}}/api/webhooks/bank", "host": ["{{baseUrl}}"], "path": ["api","webhooks","bank"] }
 					}
 				}
 			]

@@ -9,6 +9,7 @@ const authRoutes = require('./routes/authRoutes');
 const socketService = require('./services/socketService');
 const { initWebhookProcessor } = require('./services/queueService');
 const { processBankWebhook } = require('./services/webhookProcessingService');
+const { initBlockchainEventProcessor, startFailedEventRecovery } = require('./services/blockchainEventService');
 
 const app = express();
 
@@ -51,43 +52,29 @@ const io = socketService.init(server, {
   }
 });
 
-// After io is initialized, attach on-chain contract event listeners (if contract exists)
-try {
-  const { fundChainContract } = require('./config/chain');
-  if (fundChainContract && io) {
-    // CampaignCreated(uint256 indexed campaignId,uint256 targetAmount)
-    fundChainContract.on('CampaignCreated', (campaignId, targetAmount, event) => {
-      try { io.emit('CampaignCreated', { campaignId: campaignId.toString(), targetAmount: targetAmount.toString() }); } catch (e) { console.error(e); }
-    });
-
-    // DonationRecorded(uint256 indexed campaignId,string indexed bankRef,uint256 amount)
-    fundChainContract.on('DonationRecorded', (campaignId, bankRef, amount, event) => {
-      try { io.emit('DonationRecorded', { campaignId: campaignId.toString(), bankRef, amount: amount.toString() }); } catch (e) { console.error(e); }
-    });
-
-    // FundsDisbursed(uint256 indexed campaignId,uint256 amount,string beneficiaryId)
-    fundChainContract.on('FundsDisbursed', (campaignId, amount, beneficiaryId, event) => {
-      try { io.emit('FundsDisbursed', { campaignId: campaignId.toString(), amount: amount.toString(), beneficiaryId }); } catch (e) { console.error(e); }
-    });
-
-    // CampaignClosed(uint256 indexed campaignId)
-    fundChainContract.on('CampaignClosed', (campaignId, event) => {
-      try { io.emit('CampaignClosed', { campaignId: campaignId.toString() }); } catch (e) { console.error(e); }
-    });
+// After io is initialized, initialize blockchain event processor (async)
+(async () => {
+  try {
+    const processorReady = await initBlockchainEventProcessor();
+    if (processorReady) {
+      // Start periodic recovery task for failed events
+      startFailedEventRecovery();
+      console.log('✅ Blockchain event processor initialized and recovery task started');
+    }
+  } catch (err) {
+    console.warn('⚠️ Could not initialize blockchain event processor:', err.message);
   }
-} catch (err) {
-  // If chain config throws due to missing env, just log — server should still run for non-chain flows
-  console.warn('Could not attach contract event listeners:', err.message);
-}
 
-// Initialize webhook queue processor
-try {
-  initWebhookProcessor(processBankWebhook);
-  console.log('✅ Webhook queue processor initialized');
-} catch (err) {
-  console.warn('⚠️  Could not initialize webhook queue processor:', err.message);
-}
+  // Initialize webhook queue processor
+  try {
+    initWebhookProcessor(processBankWebhook);
+    console.log('✅ Webhook queue processor initialized');
+  } catch (err) {
+    console.warn('⚠️  Could not initialize webhook queue processor:', err.message);
+  }
 
-server.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+  // Start server after all async initializations
+  server.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+  });
+})();

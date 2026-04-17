@@ -1,4 +1,5 @@
 const supabase = require('../config/supabase');
+const contractService = require('../services/contractService');
 
 const TABLE_NAME = 'campaigns';
 
@@ -180,7 +181,7 @@ const getDraftCampaigns = async () => {
   }
 };
 
-// Approve (publish) draft campaign
+// Approve (publish) draft campaign & mint on blockchain
 const approveCampaign = async (id) => {
   try {
     const campaign = await getCampaignById(id);
@@ -197,18 +198,41 @@ const approveCampaign = async (id) => {
       throw new Error('Campaign must have start_date and end_date to be approved');
     }
 
+    // Step 1: Mint campaign on blockchain (Besu)
+    let blockchainTxHash = null;
+    let blockchainReceipt = null;
+    try {
+      blockchainReceipt = await contractService.createCampaign(campaign.goal_amount);
+      blockchainTxHash = blockchainReceipt?.transactionHash || null;
+      console.log(`✅ Campaign ${id} minted on blockchain: ${blockchainTxHash}`);
+    } catch (blockchainError) {
+      console.error(`⚠️ Blockchain minting failed for campaign ${id}:`, blockchainError.message);
+      throw new Error(`Failed to mint campaign on blockchain: ${blockchainError.message}`);
+    }
+
+    // Step 2: Update campaign status in database
     const { data, error } = await supabase
       .from(TABLE_NAME)
       .update({
         status: 'published',
-        approved_at: new Date().toISOString()
+        approved_at: new Date().toISOString(),
+        blockchain_tx_hash: blockchainTxHash
       })
       .eq('id', id)
       .select()
       .single();
 
     if (error) throw error;
-    return data;
+
+    // Step 3: Return both database record and blockchain receipt
+    return {
+      campaign: data,
+      blockchain: {
+        txHash: blockchainTxHash,
+        receipt: blockchainReceipt,
+        transactionHash: blockchainTxHash
+      }
+    };
   } catch (error) {
     console.error('Error approving campaign:', error);
     throw error;
