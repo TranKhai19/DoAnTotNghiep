@@ -18,21 +18,32 @@ const formatDate = (dateStr) => {
   });
 };
 
+// ── Enum values đồng bộ với DB migration 005 ─────────────────────────────────
+const CAMPAIGN_STATUS = {
+  DRAFT:            'draft',
+  PENDING_APPROVAL: 'pending_approval',
+  ACTIVE:           'active',
+  COMPLETED:        'completed',
+  REJECTED:         'rejected',
+  CLOSED:           'closed',
+};
+
 const STATUS_MAP = {
-  'Nháp':       { cls: 'draft',    label: 'Nháp',       emoji: '📝' },
-  'Chờ duyệt':  { cls: 'pending',  label: 'Chờ duyệt',  emoji: '⏳' },
-  'Đang chạy':  { cls: 'running',  label: 'Đang chạy',  emoji: '🟢' },
-  'Hoàn thành': { cls: 'done',     label: 'Hoàn thành', emoji: '✅' },
-  'Từ chối':    { cls: 'rejected', label: 'Từ chối',    emoji: '❌' },
+  draft:            { cls: 'draft',    label: 'Nháp',        emoji: '📝' },
+  pending_approval: { cls: 'pending',  label: 'Chờ duyệt',   emoji: '⏳' },
+  active:           { cls: 'running',  label: 'Đang chạy',   emoji: '🟢' },
+  completed:        { cls: 'done',     label: 'Hoàn thành',  emoji: '✅' },
+  rejected:         { cls: 'rejected', label: 'Từ chối',     emoji: '❌' },
+  closed:           { cls: 'done',     label: 'Đã đóng',     emoji: '🔒' },
 };
 
 const TABS = [
-  { key: 'all',         label: 'Tất cả' },
-  { key: 'Nháp',       label: 'Nháp' },
-  { key: 'Chờ duyệt',  label: 'Chờ duyệt' },
-  { key: 'Đang chạy',  label: 'Đang chạy' },
-  { key: 'Hoàn thành', label: 'Hoàn thành' },
-  { key: 'Từ chối',    label: 'Từ chối' },
+  { key: 'all',              label: 'Tất cả' },
+  { key: 'draft',            label: 'Nháp' },
+  { key: 'pending_approval', label: 'Chờ duyệt' },
+  { key: 'active',           label: 'Đang chạy' },
+  { key: 'completed',        label: 'Hoàn thành' },
+  { key: 'rejected',         label: 'Từ chối' },
 ];
 
 const PAGE_SIZE = 8;
@@ -175,10 +186,10 @@ const StaffCampaignPosts = ({ user }) => {
 
   // ── Stats ────────────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
-    const total     = campaigns.length;
-    const drafts    = campaigns.filter(c => c.status === 'Nháp').length;
-    const pending   = campaigns.filter(c => c.status === 'Chờ duyệt').length;
-    const running   = campaigns.filter(c => c.status === 'Đang chạy').length;
+    const total   = campaigns.length;
+    const drafts  = campaigns.filter(c => c.status === CAMPAIGN_STATUS.DRAFT).length;
+    const pending = campaigns.filter(c => c.status === CAMPAIGN_STATUS.PENDING_APPROVAL).length;
+    const running = campaigns.filter(c => c.status === CAMPAIGN_STATUS.ACTIVE).length;
     return { total, drafts, pending, running };
   }, [campaigns]);
 
@@ -255,7 +266,7 @@ const StaffCampaignPosts = ({ user }) => {
     setActionLoading(true);
     const { error } = await supabase
       .from('campaigns')
-      .update({ status: 'Chờ duyệt' })
+      .update({ status: CAMPAIGN_STATUS.PENDING_APPROVAL })
       .eq('id', submitTarget.id);
 
     setActionLoading(false);
@@ -275,8 +286,15 @@ const StaffCampaignPosts = ({ user }) => {
     const duplicated = {
       ...rest,
       title: `[Bản sao] ${campaign.title}`,
-      status: 'Nháp',
+      status: CAMPAIGN_STATUS.DRAFT,
+      approval_status: 'pending',
       raised_amount: 0,
+      onchain_campaign_id: null,
+      blockchain_tx_hash: null,
+      blockchain_minted_at: null,
+      approved_by: null,
+      approved_at: null,
+      rejection_reason: null,
       created_by: user?.id || campaign.created_by,
     };
     const { error } = await supabase.from('campaigns').insert([duplicated]);
@@ -454,9 +472,9 @@ const StaffCampaignPosts = ({ user }) => {
                 const pct = campaign.goal_amount > 0
                   ? Math.min(100, Math.round((campaign.raised_amount / campaign.goal_amount) * 100))
                   : 0;
-                const canEdit   = ['Nháp', 'Từ chối'].includes(campaign.status);
-                const canSubmit = campaign.status === 'Nháp';
-                const canDelete = ['Nháp', 'Từ chối'].includes(campaign.status);
+                const canEdit   = [CAMPAIGN_STATUS.DRAFT, CAMPAIGN_STATUS.REJECTED].includes(campaign.status);
+                const canSubmit = campaign.status === CAMPAIGN_STATUS.DRAFT;
+                const canDelete = [CAMPAIGN_STATUS.DRAFT, CAMPAIGN_STATUS.REJECTED].includes(campaign.status);
 
                 return (
                   <tr key={campaign.id}>

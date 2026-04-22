@@ -1,12 +1,12 @@
 // tests/e2e/auth.spec.js
 const { test, expect } = require('@playwright/test');
 
-const ADMIN_EMAIL    = 'tranduykhai@dtu.edu.vn';
-const ADMIN_PASSWORD = 'admin@123';
+const ADMIN_EMAIL    = 'tdk1902@gmail.com';
+const ADMIN_PASSWORD = 'Khai1902@';
 const STAFF_EMAIL    = 'khaitd.fastdo@gmail.com';
 const STAFF_PASSWORD = 'admin@123';
-const USER_EMAIL     = 'tdk1902@gmail.com';
-const USER_PASSWORD  = 'Khai1902@';
+const USER_EMAIL     = 'tranduykhai@dtu.edu.vn';
+const USER_PASSWORD  = 'admin@123';
 
 // Helper fill login form — scope vào form.r-form để tránh strict violation
 async function fillLoginForm(page, email, password) {

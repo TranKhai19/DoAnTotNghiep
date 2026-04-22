@@ -129,3 +129,18 @@ exports.estimateAdminGas = async (req, res) => {
     return res.status(400).json({ success: false, error: error.message });
   }
 };
+
+exports.getCampaignHistoryOnChain = async (req, res) => {
+  try {
+    const campaignId = req.params.id;
+    if (!campaignId || isNaN(campaignId) || Number(campaignId) <= 0) {
+      return res.status(400).json({ success: false, error: 'Invalid campaignId' });
+    }
+
+    const history = await contractService.getHistory(campaignId);
+    return res.json({ success: true, data: history });
+  } catch (error) {
+    console.error('getCampaignHistoryOnChain error:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+};

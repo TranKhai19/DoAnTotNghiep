@@ -3,334 +3,197 @@ const {
   getCampaignById,
   createCampaign,
   updateCampaign,
+  updateCampaignApproval,
+  updateCampaignBlockchain,
   deleteCampaign,
-  getDraftCampaigns,
-  approveCampaign,
-  rejectCampaign
+  CAMPAIGN_STATUS,
+  APPROVAL_STATUS,
 } = require('../models/Campaign');
 
-// Get all campaigns
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/campaigns
+// Query params: ?status=draft&approval_status=pending&created_by=<uuid>
+// ─────────────────────────────────────────────────────────────────────────────
 exports.getCampaigns = async (req, res) => {
   try {
-    const campaigns = await getAllCampaigns();
+    const { status, approval_status, created_by } = req.query;
+    const campaigns = await getAllCampaigns({ status, approval_status, created_by });
     res.json({
       success: true,
       data: campaigns,
-      total: campaigns.length
+      total: campaigns.length,
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 };
 
-// Get campaign by ID
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/campaigns/:id
+// ─────────────────────────────────────────────────────────────────────────────
 exports.getCampaignById = async (req, res) => {
   try {
     const campaign = await getCampaignById(req.params.id);
     if (!campaign) {
-      return res.status(404).json({
-        success: false,
-        error: 'Campaign not found'
-      });
+      return res.status(404).json({ success: false, error: 'Campaign not found' });
     }
-
-    res.json({
-      success: true,
-      data: campaign
-    });
+    res.json({ success: true, data: campaign });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 };
 
-// Create campaign
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/campaigns
+// Body: { title, description, goal_amount, start_date, end_date,
+//         qr_code?, category_id?, beneficiary_id?, status?, created_by? }
+// status cho phép: 'draft' (mặc định) hoặc 'pending_approval' (gửi duyệt ngay)
+// ─────────────────────────────────────────────────────────────────────────────
 exports.createCampaign = async (req, res) => {
   try {
     const {
-      title,
-      description,
-      goal_amount,
-      raised_amount,
-      qr_code,
-      category_id,
-      beneficiary_id,
-      start_date,
-      end_date,
-      status,
-      created_by
+      title, description, goal_amount,
+      raised_amount, qr_code, category_id, beneficiary_id,
+      start_date, end_date, status, created_by,
     } = req.body;
 
-    // Validation theo schema mới (snake_case)
+    // Required field check (nhanh, trước khi vào model)
     if (!title || !description || !goal_amount || !start_date || !end_date) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields: title, description, goal_amount, start_date, end_date'
+        error: 'Missing required fields: title, description, goal_amount, start_date, end_date',
       });
     }
 
-    if (isNaN(goal_amount) || goal_amount <= 0) {
+    if (isNaN(Number(goal_amount)) || Number(goal_amount) <= 0) {
       return res.status(400).json({
         success: false,
-        error: 'goal_amount must be a positive number'
+        error: 'goal_amount must be a positive number',
       });
     }
 
-    const campaignData = {
-      title,
-      description,
-      goal_amount: parseFloat(goal_amount),
-      raised_amount: raised_amount !== undefined ? parseFloat(raised_amount) : 0,
-      qr_code: qr_code || null,
-      category_id: category_id ? parseInt(category_id) : null,
-      beneficiary_id: beneficiary_id || null,
-      start_date,
-      end_date,
-      status: status || 'Đang chạy',
-      created_by: created_by || null
-    };
-
-    const newCampaign = await createCampaign(campaignData);
+    const newCampaign = await createCampaign({
+      title, description, goal_amount,
+      raised_amount, qr_code, category_id, beneficiary_id,
+      start_date, end_date, status, created_by,
+    });
 
     res.status(201).json({
       success: true,
       message: 'Campaign created successfully',
-      data: newCampaign
+      data: newCampaign,
     });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      error: error.message
-    });
+    res.status(400).json({ success: false, error: error.message });
   }
 };
 
-// Update campaign
+// ─────────────────────────────────────────────────────────────────────────────
+// PUT /api/campaigns/:id
+// Chỉ staff/author được sửa, chỉ khi status = draft | rejected
+// ─────────────────────────────────────────────────────────────────────────────
 exports.updateCampaign = async (req, res) => {
   try {
     const campaign = await updateCampaign(req.params.id, req.body);
-
     res.json({
       success: true,
       message: 'Campaign updated successfully',
-      data: campaign
+      data: campaign,
     });
   } catch (error) {
-    if (error.message === 'Campaign not found') {
-      return res.status(404).json({
-        success: false,
-        error: error.message
-      });
-    }
-
-    res.status(400).json({
-      success: false,
-      error: error.message
-    });
+    const status = error.message === 'Campaign not found' ? 404 : 400;
+    res.status(status).json({ success: false, error: error.message });
   }
 };
 
-// Delete campaign
+// ─────────────────────────────────────────────────────────────────────────────
+// PATCH /api/campaigns/:id/approval  (Admin only)
+// Body: { approval_status: 'approved'|'rejected', rejection_reason?, approved_by? }
+// ─────────────────────────────────────────────────────────────────────────────
+exports.updateCampaignApproval = async (req, res) => {
+  try {
+    const { approval_status, rejection_reason, approved_by } = req.body;
+
+    if (!approval_status) {
+      return res.status(400).json({
+        success: false,
+        error: 'approval_status is required (approved | rejected)',
+      });
+    }
+
+    if (approval_status === APPROVAL_STATUS.REJECTED && !rejection_reason) {
+      return res.status(400).json({
+        success: false,
+        error: 'rejection_reason is required when rejecting a campaign',
+      });
+    }
+
+    const campaign = await updateCampaignApproval(req.params.id, {
+      approval_status,
+      rejection_reason,
+      approved_by,
+    });
+
+    res.json({
+      success: true,
+      message: approval_status === APPROVAL_STATUS.APPROVED
+        ? 'Campaign approved and is now active'
+        : 'Campaign rejected',
+      data: campaign,
+    });
+  } catch (error) {
+    const status = error.message === 'Campaign not found' ? 404 : 400;
+    res.status(status).json({ success: false, error: error.message });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PATCH /api/campaigns/:id/blockchain  (Internal — called after on-chain tx)
+// Body: { onchain_campaign_id, blockchain_tx_hash }
+// ─────────────────────────────────────────────────────────────────────────────
+exports.updateCampaignBlockchain = async (req, res) => {
+  try {
+    const { onchain_campaign_id, blockchain_tx_hash } = req.body;
+
+    if (!onchain_campaign_id && !blockchain_tx_hash) {
+      return res.status(400).json({
+        success: false,
+        error: 'At least one of onchain_campaign_id or blockchain_tx_hash is required',
+      });
+    }
+
+    const campaign = await updateCampaignBlockchain(req.params.id, {
+      onchain_campaign_id,
+      blockchain_tx_hash,
+    });
+
+    res.json({
+      success: true,
+      message: 'Campaign blockchain metadata updated',
+      data: campaign,
+    });
+  } catch (error) {
+    const status = error.message === 'Campaign not found' ? 404 : 400;
+    res.status(status).json({ success: false, error: error.message });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DELETE /api/campaigns/:id
+// Chỉ xóa được khi status = draft | rejected
+// ─────────────────────────────────────────────────────────────────────────────
 exports.deleteCampaign = async (req, res) => {
   try {
     const campaign = await deleteCampaign(req.params.id);
-
     res.json({
       success: true,
       message: 'Campaign deleted successfully',
-      data: campaign
+      data: campaign,
     });
   } catch (error) {
-    if (error.message === 'Campaign not found') {
-      return res.status(404).json({
-        success: false,
-        error: error.message
-      });
-    }
-
-    res.status(400).json({
-      success: false,
-      error: error.message
-    });
+    const status = error.message === 'Campaign not found' ? 404 : 400;
+    res.status(status).json({ success: false, error: error.message });
   }
 };
 
-// Create draft campaign
-exports.createDraft = async (req, res) => {
-  try {
-    const {
-      title,
-      description,
-      goal_amount,
-      qr_code,
-      category_id,
-      beneficiary_id,
-      start_date,
-      end_date,
-      created_by
-    } = req.body;
 
-    // Validation - chỉ cần título, description, goal_amount
-    if (!title || !description || !goal_amount) {
-      return res.status(400).json({
-        success: false,
-        error: 'Missing required fields: title, description, goal_amount'
-      });
-    }
-
-    if (isNaN(goal_amount) || goal_amount <= 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'goal_amount must be a positive number'
-      });
-    }
-
-    const campaignData = {
-      title,
-      description,
-      goal_amount: parseFloat(goal_amount),
-      qr_code: qr_code || null,
-      category_id: category_id ? parseInt(category_id) : null,
-      beneficiary_id: beneficiary_id || null,
-      start_date: start_date || null,
-      end_date: end_date || null,
-      created_by: created_by || null,
-      draft: true
-    };
-
-    const newDraft = await createCampaign(campaignData);
-
-    res.status(201).json({
-      success: true,
-      message: 'Draft campaign created successfully',
-      data: newDraft
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      error: error.message
-    });
-  }
-};
-
-// Update draft campaign
-exports.updateDraft = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const campaign = await getCampaignById(id);
-
-    if (!campaign) {
-      return res.status(404).json({
-        success: false,
-        error: 'Campaign not found'
-      });
-    }
-
-    if (campaign.status !== 'draft') {
-      return res.status(400).json({
-        success: false,
-        error: `Cannot update campaign in ${campaign.status} status. Only draft campaigns can be updated.`
-      });
-    }
-
-    const updatedCampaign = await updateCampaign(id, req.body);
-
-    res.json({
-      success: true,
-      message: 'Draft campaign updated successfully',
-      data: updatedCampaign
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      error: error.message
-    });
-  }
-};
-
-// Get all draft campaigns (for Admin review)
-exports.getDrafts = async (req, res) => {
-  try {
-    const drafts = await getDraftCampaigns();
-    res.json({
-      success: true,
-      data: drafts,
-      total: drafts.length
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-};
-
-// Admin approve draft campaign
-exports.approveDraft = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const result = await approveCampaign(id);
-
-    res.json({
-      success: true,
-      message: 'Campaign approved, published successfully & minted on blockchain',
-      data: {
-        campaign: result.campaign,
-        blockchain: result.blockchain
-      }
-    });
-  } catch (error) {
-    if (error.message.includes('not found') || error.message.includes('not draft')) {
-      return res.status(400).json({
-        success: false,
-        error: error.message
-      });
-    }
-
-    if (error.message.includes('blockchain') || error.message.includes('Blockchain')) {
-      return res.status(502).json({
-        success: false,
-        error: error.message,
-        message: 'Blockchain operation failed'
-      });
-    }
-
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-};
-
-// Admin reject draft campaign
-exports.rejectDraft = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { reason } = req.body;
-
-    const rejectedCampaign = await rejectCampaign(id, reason || null);
-
-    res.json({
-      success: true,
-      message: 'Campaign rejected',
-      data: rejectedCampaign
-    });
-  } catch (error) {
-    if (error.message.includes('not found') || error.message.includes('not draft')) {
-      return res.status(400).json({
-        success: false,
-        error: error.message
-      });
-    }
-
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-};

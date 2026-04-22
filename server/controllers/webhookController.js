@@ -156,7 +156,66 @@ exports.ethereumWebhook = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Ethereum webhook error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+// API Endpoint cho Worker nhận txHash để cập nhật trạng thái Success
+exports.updateOnchainStatus = async (req, res) => {
+  try {
+    const { txHash, recordId, type } = req.body;
+    // type: 'donation' | 'disbursement' | 'campaign'
+    
+    if (!txHash || !recordId || !type) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: txHash, recordId, type'
+      });
+    }
+
+    let tableName;
+    if (type === 'donation') tableName = 'donations';
+    else if (type === 'disbursement') tableName = 'disbursements';
+    else if (type === 'campaign') tableName = 'campaigns';
+    else {
+      return res.status(400).json({ success: false, error: 'Invalid type provided' });
+    }
+
+    // Cập nhật trạng thái Success và lưu txHash vào DB
+    // Database schema có thể mới được cập nhật thêm cột 'status'
+    const payload = {
+      tx_hash: txHash,
+      status: 'Success'
+    };
+
+    if(type === 'campaign') {
+      // Đối với campaign status hiện đang dùng là 'Đang chạy' hoặc 'Hoàn thành', 
+      // ta có thể lưu contract_address bằng txHash hoặc thuộc tính khác,
+      // ở đây tuân theo yêu cầu: cập nhật trạng thái Success và txHash
+      payload.status = 'Success';
+    }
+
+    const { data, error } = await supabase
+      .from(tableName)
+      .update(payload)
+      .eq('id', recordId)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    console.log(`✅ Worker Update: Set ${type} ${recordId} info to Success with txHash ${txHash}`);
+
+    res.status(200).json({
+      success: true,
+      message: `Updated ${type} status to Success`,
+      data
+    });
+  } catch (error) {
+    console.error('Worker updateOnchainStatus error:', error);
     res.status(500).json({
       success: false,
       error: error.message

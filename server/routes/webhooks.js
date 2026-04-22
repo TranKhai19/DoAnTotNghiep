@@ -11,4 +11,7 @@ router.post('/ethereum', webhookController.ethereumWebhook);
 // Webhook test endpoint
 router.post('/test', webhookController.simulatePayment);
 
+// Cập nhật trạng thái từ Worker 
+router.post('/onchain-status', webhookController.updateOnchainStatus);
+
 module.exports = router;

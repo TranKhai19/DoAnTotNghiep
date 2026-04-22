@@ -238,11 +238,58 @@ async function estimateAdminActionGas(action, params = {}) {
   throw new Error('Unsupported action for gas estimation. Use createCampaign, disburseFunds, or closeCampaign');
 }
 
+async function getHistory(campaignId) {
+  const parsedCampaignId = toPositiveBigInt(campaignId, 'campaignId');
+
+  return executeWithRpcRetry(async ({ contract }) => {
+    // Gọi trực tiếp View Functions của Smart Contract
+    const [donations, disbursements] = await Promise.all([
+      contract.getCampaignDonations(parsedCampaignId),
+      contract.getCampaignDisbursements(parsedCampaignId)
+    ]);
+
+    // Format dữ liệu
+    const history = [];
+    
+    donations.forEach(d => {
+      history.push({
+        id: `don_${d.bankRef}`,
+        txHash: d.bankRef, // Giả sử bankRef được dùng map với txHash (hoặc id tham chiếu)
+        timestamp: new Date(Number(d.timestamp) * 1000).toISOString(),
+        type: 'Quyên góp',
+        from: d.donor || 'Anonymous',
+        to: 'Contract',
+        amount: Number(d.amount),
+        status: 'Success'
+      });
+    });
+
+    disbursements.forEach((d, index) => {
+      history.push({
+        id: `dis_${index}_${d.timestamp}`,
+        txHash: `disbursed_${index}`, // Dummy for frontend
+        timestamp: new Date(Number(d.timestamp) * 1000).toISOString(),
+        type: 'Giải ngân',
+        from: 'Contract',
+        to: d.beneficiaryId || 'Beneficiary',
+        amount: Number(d.amount),
+        status: 'Success'
+      });
+    });
+
+    // Sort theo thời gian mới nhất (descending)
+    history.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    return history;
+  });
+}
+
 module.exports = {
   createCampaign,
   getCampaign,
   recordDonation,
   disburseFunds,
   closeCampaign,
-  estimateAdminActionGas
+  estimateAdminActionGas,
+  getHistory
 };

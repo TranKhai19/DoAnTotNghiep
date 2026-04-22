@@ -3,6 +3,28 @@ import { Routes, Route, Link, useLocation, useNavigate, useParams } from 'react-
 import { supabase } from './supabaseClient';
 import './AdminDashboard.css';
 import StaffCampaignPosts from './pages/admin/StaffCampaignPosts';
+import BeneficiaryForm from './components/BeneficiaryForm';
+import { z } from 'zod';
+
+// Zod Schema for Create Campaign
+export const campaignSchema = z.object({
+  title: z.string().min(5, 'Tiêu đề phải có ít nhất 5 ký tự').max(200, 'Tiêu đề quá dài'),
+  description: z.string().min(20, 'Mô tả cần ít nhất 20 ký tự để chi tiết hơn'),
+  goal_amount: z.number().min(100, 'Mục tiêu tối thiểu là $100'),
+  qr_code: z.string().url('Link URL không hợp lệ').optional().or(z.literal('')),
+  category_id: z.number().int({ message: 'Vui lòng chọn danh mục' }).min(1, 'Vui lòng chọn danh mục'),
+  start_date: z.string().min(1, 'Vui lòng chọn ngày bắt đầu'),
+  end_date: z.string().min(1, 'Vui lòng chọn ngày kết thúc'),
+}).refine(data => {
+  if (data.start_date && data.end_date) {
+    return new Date(data.start_date) <= new Date(data.end_date);
+  }
+  return true;
+}, {
+  message: "Ngày kết thúc phải sau ngày bắt đầu",
+  path: ["end_date"]
+});
+
 
 const AdminSidebar = ({ role }) => {
   const location = useLocation();
@@ -53,10 +75,47 @@ const AdminSidebar = ({ role }) => {
 
 const AdminCampaigns = () => {
   const navigate = useNavigate();
-  const [campaigns] = useState([
-    { id: 1, title: 'Giáo dục cho 500 trẻ mồ côi tại trung tâm...', raised: 2460, target: 5750, status: 'Đang chạy' },
-    { id: 2, title: 'Xây dựng 2 lớp học tình thương...', raised: 1450, target: 4200, status: 'Hoàn thành' },
+  const [campaigns, setCampaigns] = useState([
+    { id: '1', title: 'Giáo dục cho 500 trẻ mồ côi tại trung tâm...', raised: 2460, target: 5750, status: 'Đang chạy' },
+    { id: '2', title: 'Xây dựng 2 lớp học tình thương...', raised: 1450, target: 4200, status: 'Hoàn thành' },
   ]);
+
+  useEffect(() => {
+    const handleBlockchainUpdate = (e) => {
+      const { type, data } = e.detail;
+      
+      if (type === 'recordDonation') {
+        const donationAmount = parseFloat(data.amount) || 0;
+        setCampaigns(prev => prev.map(c => {
+          if (c.id.toString() === data.campaignId?.toString()) {
+            return { ...c, raised: c.raised + donationAmount };
+          }
+          return c;
+        }));
+      } else if (type === 'createCampaign') {
+        setCampaigns(prev => [
+          {
+            id: Date.now().toString(), // temporary ID
+            title: 'Chiến dịch mới (Ghi nhận từ Onchain)',
+            raised: 0,
+            target: parseFloat(data.targetAmount) || 0,
+            status: 'Đang chạy',
+          },
+          ...prev
+        ]);
+      } else if (type === 'closeCampaign') {
+        setCampaigns(prev => prev.map(c => {
+          if (c.id.toString() === data.campaignId?.toString()) {
+            return { ...c, status: 'Hoàn thành' };
+          }
+          return c;
+        }));
+      }
+    };
+
+    window.addEventListener('blockchain:update', handleBlockchainUpdate);
+    return () => window.removeEventListener('blockchain:update', handleBlockchainUpdate);
+  }, []);
 
   return (
     <div className="admin-page fade-in">
@@ -120,28 +179,8 @@ const CampaignDetails = () => {
     setCampaign({ id, title: `Chiến dịch demo #${id}`, target: 5000, raised: 100 });
   }, [id]);
 
-  const handleAddBeneficiary = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    const formData = new FormData(e.target);
-    const payload = {
-      name: formData.get('name'),
-      address: formData.get('address'),
-      phone: formData.get('phone'),
-      documents: { link: formData.get('documents') },
-      // is_verified: false 
-    };
-    
-    // Insert người thụ hưởng
-    const { error } = await supabase.from('beneficiaries').insert([payload]);
-    setLoading(false);
-    
-    if (!error) {
-       alert('Đã thêm người thụ hưởng thành công!');
-       e.target.reset();
-    } else {
-       alert('Lỗi: ' + error.message);
-    }
+  const handleAddBeneficiarySuccess = () => {
+    // Tải lại danh sách người thụ hưởng hoặc cập nhật UI
   };
 
   return (
@@ -168,18 +207,7 @@ const CampaignDetails = () => {
            <h3 className="mb-8" style={{color: 'var(--primary)'}}>Danh sách người thụ hưởng</h3>
            <p className="text-muted mb-24" style={{fontSize: 14}}>Quản lý các cá nhân, tổ chức hoặc địa phương nhận giải ngân từ chiến dịch này.</p>
            
-           <div style={{backgroundColor: '#faf9ff', padding: 16, borderRadius: 8, marginBottom: 24, border: '1px solid #eaeaea'}}>
-              <h4 className="mb-16" style={{fontSize: 14}}>+ Thêm Người thụ hưởng mới</h4>
-              <form onSubmit={handleAddBeneficiary}>
-                  <input type="text" name="name" placeholder="Tên người/đơn vị thụ hưởng..." className="admin-input mb-8" required />
-                  <input type="text" name="address" placeholder="Địa chỉ thường trú / Vị trí..." className="admin-input mb-8" required />
-                  <input type="tel" name="phone" placeholder="Số điện thoại liên hệ..." className="admin-input mb-8" required />
-                  <input type="url" name="documents" placeholder="Link hồ sơ hoàn cảnh (Drive, PDF)..." className="admin-input mb-16" />
-                  <button type="submit" className="btn btn-primary w-100" disabled={loading}>
-                    {loading ? 'Đang lưu...' : 'Lưu người thụ hưởng'}
-                  </button>
-              </form>
-           </div>
+           <BeneficiaryForm campaignId={id} onAddSuccess={handleAddBeneficiarySuccess} />
            
            <div className="text-center text-muted py-32" style={{border: '1px dashed #ccc', borderRadius: 8}}>
               Chưa có danh sách người thụ hưởng nào được liên kết.
@@ -308,24 +336,45 @@ const OrgProfile = ({ user }) => {
 
 const CreateCampaign = ({ user }) => {
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState({});
   const navigate = useNavigate();
 
   const handleCreate = async (e) => {
     e.preventDefault();
-    setLoading(true);
+    setErrors({});
 
     const formData = new FormData(e.target);
-    const newCampaign = {
+    const rawData = {
       title: formData.get('title'),
       description: formData.get('description'),
-      goal_amount: parseFloat(formData.get('goal_amount')),
-      raised_amount: 0,
-      qr_code: formData.get('qr_code') || null,
-      category_id: parseInt(formData.get('category_id')),
-      beneficiary_id: formData.get('beneficiary_id') || user?.id,
+      goal_amount: parseFloat(formData.get('goal_amount')) || 0,
+      qr_code: formData.get('qr_code') || '',
+      category_id: parseInt(formData.get('category_id')) || 0,
       start_date: formData.get('start_date'),
       end_date: formData.get('end_date'),
-      status: 'Đang chạy',
+    };
+
+    try {
+      campaignSchema.parse(rawData);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        const newErrors = {};
+        err.issues.forEach(errItem => {
+          newErrors[errItem.path[0]] = errItem.message;
+        });
+        setErrors(newErrors);
+        return;
+      }
+    }
+
+    setLoading(true);
+
+    const newCampaign = {
+      ...rawData,
+      raised_amount: 0,
+      qr_code: rawData.qr_code || null,
+      beneficiary_id: formData.get('beneficiary_id') || null,
+      status: 'active',
       created_by: user?.id
     };
 
@@ -349,34 +398,38 @@ const CreateCampaign = ({ user }) => {
           </div>
       </div>
       <div className="admin-card" style={{ maxWidth: 850 }}>
-         <form onSubmit={handleCreate}>
+         <form onSubmit={handleCreate} noValidate>
             <div style={{ padding: 24, borderBottom: '1px solid #eaeaea' }}>
                <h3 style={{ fontSize: 16, marginBottom: 24, color: 'var(--primary)' }}>Thông tin cơ bản</h3>
                <div className="form-group mb-24">
                   <label className="admin-label">Tiêu đề chiến dịch (Title) <span className="text-danger">*</span></label>
-                  <input type="text" name="title" className="admin-input" placeholder="Ví dụ: Cứu trợ đồng bào lũ lụt miền Bắc" required />
+                  <input type="text" name="title" className="admin-input" placeholder="Ví dụ: Cứu trợ đồng bào lũ lụt miền Bắc" style={{ borderColor: errors.title ? 'red' : '' }} />
+                  {errors.title && <div style={{ color: 'red', fontSize: '13px', marginTop: '4px' }}>{errors.title}</div>}
                </div>
                <div className="form-group mb-24">
                   <label className="admin-label">Mô tả giới thiệu (Description) <span className="text-danger">*</span></label>
-                  <textarea name="description" className="admin-input" rows="5" placeholder="Chia sẻ chi tiết, mạch lạc về hoàn cảnh và mục đích của chiến dịch..." required></textarea>
+                  <textarea name="description" className="admin-input" rows="5" placeholder="Chia sẻ chi tiết, mạch lạc về hoàn cảnh và mục đích của chiến dịch..." style={{ borderColor: errors.description ? 'red' : '' }}></textarea>
+                  {errors.description && <div style={{ color: 'red', fontSize: '13px', marginTop: '4px' }}>{errors.description}</div>}
                </div>
                
                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px' }}>
                  <div className="form-group">
                     <label className="admin-label">Mục tiêu tài trợ (Goal Amount) <span className="text-danger">*</span></label>
                     <div style={{position: 'relative'}}>
-                       <input type="number" name="goal_amount" className="admin-input" style={{paddingLeft: 40}} placeholder="5000000" min="1" required />
+                       <input type="number" name="goal_amount" className="admin-input" style={{paddingLeft: 40, borderColor: errors.goal_amount ? 'red' : ''}} placeholder="5000000" min="1" />
                        <span style={{position: 'absolute', left: 14, top: 12, fontWeight: 600, color: '#666'}}>$</span>
                     </div>
+                    {errors.goal_amount && <div style={{ color: 'red', fontSize: '13px', marginTop: '4px' }}>{errors.goal_amount}</div>}
                  </div>
                  <div className="form-group">
                     <label className="admin-label">Danh mục (Category_ID) <span className="text-danger">*</span></label>
-                    <select name="category_id" className="admin-select" required>
+                    <select name="category_id" className="admin-select" style={{ borderColor: errors.category_id ? 'red' : '' }}>
                        <option value="">-- Chọn lĩnh vực --</option>
                        <option value="1">Trẻ em (1)</option>
                        <option value="2">Y tế (2)</option>
                        <option value="3">Thiên tai (3)</option>
                     </select>
+                    {errors.category_id && <div style={{ color: 'red', fontSize: '13px', marginTop: '4px' }}>{errors.category_id}</div>}
                  </div>
                </div>
             </div>
@@ -387,7 +440,8 @@ const CreateCampaign = ({ user }) => {
                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px' }}>
                  <div className="form-group">
                     <label className="admin-label">Mã QR Code nhận tiền (Link/URL)</label>
-                    <input type="url" name="qr_code" className="admin-input" placeholder="https://domain.com/qrcode.png" />
+                    <input type="url" name="qr_code" className="admin-input" placeholder="https://domain.com/qrcode.png" style={{ borderColor: errors.qr_code ? 'red' : '' }} />
+                    {errors.qr_code && <div style={{ color: 'red', fontSize: '13px', marginTop: '4px' }}>{errors.qr_code}</div>}
                  </div>
                  <div className="form-group">
                     <label className="admin-label">ID Người thụ hưởng (Beneficiary ID)</label>
@@ -398,11 +452,13 @@ const CreateCampaign = ({ user }) => {
                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '8px' }}>
                  <div className="form-group">
                     <label className="admin-label">Ngày bắt đầu (Start Date) <span className="text-danger">*</span></label>
-                    <input type="date" name="start_date" className="admin-input" required />
+                    <input type="date" name="start_date" className="admin-input" style={{ borderColor: errors.start_date ? 'red' : '' }} />
+                    {errors.start_date && <div style={{ color: 'red', fontSize: '13px', marginTop: '4px' }}>{errors.start_date}</div>}
                  </div>
                  <div className="form-group">
                     <label className="admin-label">Ngày kết thúc (End Date) <span className="text-danger">*</span></label>
-                    <input type="date" name="end_date" className="admin-input" required />
+                    <input type="date" name="end_date" className="admin-input" style={{ borderColor: errors.end_date ? 'red' : '' }} />
+                    {errors.end_date && <div style={{ color: 'red', fontSize: '13px', marginTop: '4px' }}>{errors.end_date}</div>}
                  </div>
                </div>
             </div>

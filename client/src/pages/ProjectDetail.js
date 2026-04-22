@@ -1,8 +1,10 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import ProjectCard from '../components/ProjectCard';
+import OnchainHistoryTable from '../components/OnchainHistoryTable';
 
 const ProjectDetail = () => {
+  const { id } = useParams();
   const thumbs = [
     "/assets/Visily-Export-to-Image-Image 105-2026-03-17.png",
     "/assets/Visily-Export-to-Image-Image 106-2026-03-17.png",
@@ -126,6 +128,8 @@ const ProjectDetail = () => {
              </div>
           </div>
        </div>
+
+       <OnchainHistoryTable campaignId={id} />
 
        <div className="related-projects mt-80 pt-40" style={{borderTop: '2px solid var(--primary)'}}>
            <div className="section-header-row mb-32 mt-40">

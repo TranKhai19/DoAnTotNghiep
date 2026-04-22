@@ -1,8 +1,8 @@
 // tests/e2e/admin.spec.js
 const { test, expect } = require('@playwright/test');
 
-const ADMIN_EMAIL    = 'tranduykhai@dtu.edu.vn';
-const ADMIN_PASSWORD = 'admin@123';
+const ADMIN_EMAIL    = 'tdk1902@gmail.com';
+const ADMIN_PASSWORD = 'Khai1902@';
 
 async function loginAsAdmin(page) {
   await page.goto('/login');
