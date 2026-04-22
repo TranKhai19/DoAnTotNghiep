@@ -1,5 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { SocketProvider } from './components/SocketProvider';
 import './App.css';
 import AdminDashboard from './AdminDashboard';
 
@@ -38,12 +39,14 @@ const MainLayout = () => (
 
 function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/admin/*" element={<AdminDashboard />} />
-        <Route path="/*" element={<MainLayout />} />
-      </Routes>
-    </Router>
+    <SocketProvider>
+      <Router>
+        <Routes>
+          <Route path="/admin/*" element={<AdminDashboard />} />
+          <Route path="/*" element={<MainLayout />} />
+        </Routes>
+      </Router>
+    </SocketProvider>
   );
 }
 

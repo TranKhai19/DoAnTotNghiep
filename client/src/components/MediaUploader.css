@@ -1,0 +1,417 @@
+/* ===== MediaUploader Component Styles ===== */
+
+.media-uploader {
+  width: 100%;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* --- Drop Zone --- */
+.media-uploader__dropzone {
+  position: relative;
+  border: 2px dashed #cbd5e0;
+  border-radius: 12px;
+  padding: 40px 24px;
+  text-align: center;
+  cursor: pointer;
+  background-color: #f8fafc;
+  transition: all 0.25s ease;
+  outline: none;
+}
+
+.media-uploader__dropzone:hover,
+.media-uploader__dropzone.is-hovering {
+  border-color: var(--primary, #3b2397);
+  background-color: #f0f0ff;
+  box-shadow: 0 0 0 4px rgba(59, 35, 151, 0.08);
+}
+
+.media-uploader__dropzone.is-dragging {
+  border-color: var(--primary, #3b2397);
+  background-color: #ebe8ff;
+  box-shadow: 0 0 0 4px rgba(59, 35, 151, 0.15);
+  transform: scale(1.01);
+}
+
+.media-uploader__dropzone.has-error {
+  border-color: #e53e3e;
+  background-color: #fff5f5;
+}
+
+.media-uploader__dropzone input[type="file"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* --- Drop Zone Icon & Text --- */
+.media-uploader__icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #e0e7ff 0%, #ede9fe 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+  transition: transform 0.2s ease;
+}
+
+.media-uploader__dropzone.is-dragging .media-uploader__icon {
+  transform: scale(1.15);
+}
+
+.media-uploader__icon svg {
+  color: var(--primary, #3b2397);
+}
+
+.media-uploader__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #2d3748;
+  margin: 0 0 6px;
+}
+
+.media-uploader__subtitle {
+  font-size: 13px;
+  color: #718096;
+  margin: 0 0 12px;
+}
+
+.media-uploader__subtitle span {
+  color: var(--primary, #3b2397);
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.media-uploader__hint {
+  font-size: 12px;
+  color: #a0aec0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.media-uploader__hint-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: #e2e8f0;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #4a5568;
+}
+
+/* --- Error Message --- */
+.media-uploader__error {
+  margin-top: 10px;
+  padding: 10px 14px;
+  background: #fff5f5;
+  border: 1px solid #fed7d7;
+  border-radius: 8px;
+  color: #c53030;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* --- File Queue List (Multiple) --- */
+.media-uploader__queue {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* --- Single File Item --- */
+.media-uploader__file-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  transition: box-shadow 0.2s;
+  animation: slideInItem 0.2s ease;
+}
+
+.media-uploader__file-item:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+@keyframes slideInItem {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Thumbnail */
+.media-uploader__thumb {
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+  background: #edf2f7;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.media-uploader__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.media-uploader__thumb-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+  background: #edf2f7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 24px;
+}
+
+/* File info */
+.media-uploader__file-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.media-uploader__file-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #2d3748;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 4px;
+}
+
+.media-uploader__file-size {
+  font-size: 11px;
+  color: #a0aec0;
+}
+
+/* --- Progress Bar --- */
+.media-uploader__progress-wrap {
+  margin-top: 6px;
+}
+
+.media-uploader__progress-track {
+  height: 5px;
+  background: #e2e8f0;
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.media-uploader__progress-bar {
+  height: 100%;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, var(--primary, #3b2397) 0%, #7c3aed 100%);
+  transition: width 0.3s ease;
+}
+
+.media-uploader__progress-bar.is-done {
+  background: linear-gradient(90deg, #22c55e 0%, #16a34a 100%);
+}
+
+.media-uploader__progress-bar.is-error {
+  background: #e53e3e;
+  width: 100% !important;
+}
+
+.media-uploader__progress-text {
+  font-size: 11px;
+  color: #718096;
+  margin-top: 3px;
+  display: flex;
+  justify-content: space-between;
+}
+
+/* --- Status Badge --- */
+.media-uploader__status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.media-uploader__status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 9999px;
+}
+
+.media-uploader__status-badge.uploading {
+  background: #e0e7ff;
+  color: #4338ca;
+}
+
+.media-uploader__status-badge.done {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.media-uploader__status-badge.error {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* Spinner */
+.media-uploader__spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid #a5b4fc;
+  border-top-color: #4338ca;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* --- Remove Button --- */
+.media-uploader__remove-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #a0aec0;
+  padding: 6px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.media-uploader__remove-btn:hover {
+  background: #fee2e2;
+  color: #e53e3e;
+}
+
+/* --- Link Copy --- */
+.media-uploader__link-row {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.media-uploader__link-input {
+  flex: 1;
+  font-size: 12px;
+  padding: 7px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  color: #4a5568;
+  background: #f8fafc;
+  outline: none;
+  min-width: 0;
+}
+
+.media-uploader__copy-btn {
+  flex-shrink: 0;
+  padding: 7px 12px;
+  font-size: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: white;
+  color: #4a5568;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s;
+}
+
+.media-uploader__copy-btn:hover {
+  background: #f0f0ff;
+  border-color: var(--primary, #3b2397);
+  color: var(--primary, #3b2397);
+}
+
+.media-uploader__copy-btn.copied {
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #166534;
+}
+
+/* --- Single Preview (khi multiple=false và upload xong) --- */
+.media-uploader__single-preview {
+  margin-top: 14px;
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.media-uploader__single-preview img {
+  width: 100%;
+  max-height: 220px;
+  object-fit: cover;
+  display: block;
+}
+
+.media-uploader__single-preview-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.media-uploader__single-preview:hover .media-uploader__single-preview-overlay {
+  opacity: 1;
+}
+
+.media-uploader__preview-action-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s;
+}
+
+.media-uploader__preview-action-btn.view {
+  background: rgba(255,255,255,0.9);
+  color: #2d3748;
+}
+
+.media-uploader__preview-action-btn.remove {
+  background: rgba(229, 62, 62, 0.9);
+  color: white;
+}
+
+.media-uploader__preview-action-btn:hover {
+  transform: scale(1.05);
+}

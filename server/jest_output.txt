@@ -1,0 +1,85 @@
+  console.log
+    Test 1 error: {
+      success: false,
+      error: 'new row violates row-level security policy for table "campaigns"'
+    }
+
+      at Object.log (tests/api.test.js:173:41)
+
+  console.log
+    Test 2 error: {
+      success: false,
+      error: 'new row violates row-level security policy for table "campaigns"'
+    }
+
+      at Object.log (tests/api.test.js:199:41)
+
+FAIL tests/api.test.js
+  Health Check
+    √ GET / → server đang chạy (33 ms)
+    √ GET /api/health → status OK (5 ms)
+  Auth — Đăng nhập hợp lệ
+    √ Admin login thành công và có session (624 ms)
+    √ Staff login thành công và có session (306 ms)
+    √ User login thành công và có session (305 ms)
+  Auth — Đăng nhập sai
+    √ Sai mật khẩu → 400 + message lỗi (279 ms)
+    √ Email không tồn tại → 400 (191 ms)
+    √ Thiếu email → 400 (193 ms)
+    √ Thiếu password → 400 (277 ms)
+  Campaigns — GET
+    √ GET /api/campaigns → 200, trả về array (301 ms)
+    √ GET /api/campaigns → từng item có đủ field theo schema mới (288 ms)
+    √ GET /api/campaigns/747b639b-36c8-4a57-99fd-9f838c3bbc08 → tìm thấy (272 ms)
+    √ GET /api/campaigns/:id với uuid không tồn tại → 404 (285 ms)
+  Campaigns — POST (tạo mới)
+    × Tạo campaign với đầy đủ field (status=draft) → 201 (335 ms)
+    × Tạo campaign với status cũ tiếng Việt ("Đang chạy") → server bỏ qua, dùng mặc định draft (288 ms)
+    √ Tạo campaign thiếu title → 400 + error message snake_case (2 ms)
+    √ Tạo campaign thiếu goal_amount → 400 (2 ms)
+    √ Tạo campaign goal_amount = 0 → 400 (2 ms)
+    √ Tạo campaign dùng field cũ (camelCase) → 400 (field không được chấp nhận) (1 ms)
+  Webhooks
+    √ POST /api/webhooks/bank thiếu transactionId → 400 (5 ms)
+    √ POST /api/webhooks/bank amount = 0 → 400 (1 ms)
+    √ POST /api/webhooks/bank campaignId không tồn tại → 404 (237 ms)
+
+  ● Campaigns — POST (tạo mới) › Tạo campaign với đầy đủ field (status=draft) → 201
+
+    expect(received).toContain(expected) // indexOf
+
+    Expected value: 400
+    Received array: [200, 201]
+
+    [0m [90m 172 |[39m       })[33m;[39m
+     [90m 173 |[39m     [36mif[39m (res[33m.[39mstatusCode [33m!==[39m [35m201[39m) console[33m.[39mlog([32m"Test 1 error:"[39m[33m,[39m res[33m.[39mbody)[33m;[39m
+    [31m[1m>[22m[39m[90m 174 |[39m     expect([[35m200[39m[33m,[39m [35m201[39m])[33m.[39mtoContain(res[33m.[39mstatusCode)[33m;[39m
+     [90m     |[39m                        [31m[1m^[22m[39m
+     [90m 175 |[39m     [36mif[39m (res[33m.[39mstatusCode [33m===[39m [35m201[39m) {
+     [90m 176 |[39m       [36mconst[39m data [33m=[39m res[33m.[39mbody[33m.[39mdata [33m?[39m[33m?[39m res[33m.[39mbody[33m;[39m
+     [90m 177 |[39m       expect(data)[33m.[39mtoHaveProperty([32m'id'[39m)[33m;[39m[0m
+
+      at Object.toContain (tests/api.test.js:174:24)
+
+  ● Campaigns — POST (tạo mới) › Tạo campaign với status cũ tiếng Việt ("Đang chạy") → server bỏ qua, dùng mặc định draft
+
+    expect(received).toContain(expected) // indexOf
+
+    Expected value: 400
+    Received array: [200, 201]
+
+    [0m [90m 198 |[39m     [90m// Server fallback 'draft' — vẫn tạo được (không reject)[39m
+     [90m 199 |[39m     [36mif[39m (res[33m.[39mstatusCode [33m!==[39m [35m201[39m) console[33m.[39mlog([32m"Test 2 error:"[39m[33m,[39m res[33m.[39mbody)[33m;[39m
+    [31m[1m>[22m[39m[90m 200 |[39m     expect([[35m200[39m[33m,[39m [35m201[39m])[33m.[39mtoContain(res[33m.[39mstatusCode)[33m;[39m
+     [90m     |[39m                        [31m[1m^[22m[39m
+     [90m 201 |[39m     [36mif[39m (res[33m.[39mstatusCode [33m===[39m [35m201[39m) {
+     [90m 202 |[39m       [36mconst[39m data [33m=[39m res[33m.[39mbody[33m.[39mdata [33m?[39m[33m?[39m res[33m.[39mbody[33m;[39m
+     [90m 203 |[39m       expect(data[33m.[39mstatus)[33m.[39mtoBe([32m'draft'[39m)[33m;[39m [90m// đã được ập về draft[39m[0m
+
+      at Object.toContain (tests/api.test.js:200:24)
+
+Test Suites: 1 failed, 1 total
+Tests:       2 failed, 20 passed, 22 total
+Snapshots:   0 total
+Time:        4.601 s, estimated 6 s
+Ran all test suites matching tests/api.test.js.

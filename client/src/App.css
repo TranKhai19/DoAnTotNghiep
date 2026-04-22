@@ -1206,6 +1206,29 @@
 }
 
 @media (max-width: 768px) {
+  .header, .hero, .newsletter, .disaster, .footer-grid, .steps-grid, .news-grid {
+    flex-direction: column;
+    padding-left: 16px;
+    padding-right: 16px;
+    gap: 20px;
+  }
+  .nav-links, .header-actions {
+    display: none;
+  }
+  .footer-grid {
+    grid-template-columns: 1fr;
+  }
+  .input-group {
+    flex-direction: column;
+  }
+  .newsletter-img img {
+    max-width: 100%;
+  }
+  form {
+    max-width: 100%;
+    overflow: hidden;
+    box-sizing: border-box;
+  }
   .project-hero {
     flex-direction: column;
     text-align: center;
