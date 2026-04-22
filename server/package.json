@@ -21,12 +21,14 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.99.3",
     "bcrypt": "^6.0.0",
+    "bull": "^4.16.5",
     "cors": "^2.8.6",
     "dotenv": "^16.6.1",
     "ethers": "^6.16.0",
     "express": "^4.22.1",
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.20.0",
+    "redis": "^5.12.1",
     "socket.io": "^4.8.1"
   },
   "devDependencies": {
