@@ -182,6 +182,35 @@ exports.updateCampaignBlockchain = async (req, res) => {
 // DELETE /api/campaigns/:id
 // Chỉ xóa được khi status = draft | rejected
 // ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/campaigns/:id/history (On-chain history)
+// ─────────────────────────────────────────────────────────────────────────────
+exports.getCampaignHistory = async (req, res) => {
+  try {
+    const campaign = await getCampaignById(req.params.id);
+    if (!campaign) {
+      return res.status(404).json({ success: false, error: 'Campaign not found' });
+    }
+
+    if (!campaign.onchain_campaign_id) {
+      // Nếu chưa có trên chuỗi, trả về mảng rỗng thay vì lỗi
+      return res.json({ success: true, data: [], source: 'database' });
+    }
+
+    const contractService = require('../services/contractService');
+    const history = await contractService.getHistory(campaign.onchain_campaign_id);
+    
+    res.json({ 
+      success: true, 
+      data: history,
+      source: 'blockchain'
+    });
+  } catch (error) {
+    console.error('❌ [HISTORY] Lỗi lấy lịch sử blockchain:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 exports.deleteCampaign = async (req, res) => {
   try {
     const campaign = await deleteCampaign(req.params.id);

@@ -1,10 +1,10 @@
-const jwt = require('jsonwebtoken');
+const supabase = require('../config/supabase');
 
 /**
- * Verify JWT token từ header
+ * Verify JWT token từ header bằng Supabase Auth
  * Format: Authorization: Bearer <token>
  */
-const verifyToken = (req, res, next) => {
+const verifyToken = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
     
@@ -16,17 +16,66 @@ const verifyToken = (req, res, next) => {
     }
 
     const token = authHeader.substring(7); // Remove "Bearer "
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret-key');
+    
+    // Sử dụng Supabase để verify token thay vì tự verify thủ công
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+
+    if (error || !user) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid or expired token'
+      });
+    }
+
+    // Lấy role từ bảng profiles (off-chain/metadata)
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
 
     // Attach user info vào request
-    req.user = decoded;
+    req.user = {
+      ...user,
+      role: profile?.role || user.app_metadata?.role || user.user_metadata?.role || 'user'
+    };
+
     next();
   } catch (error) {
     console.error('❌ Token verification failed:', error.message);
     return res.status(401).json({
       success: false,
-      error: 'Invalid or expired token'
+      error: 'Authentication failed'
     });
+  }
+};
+
+/**
+ * Middleware để detect user nhưng không bắt buộc login
+ */
+const detectUser = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      const { data: { user } } = await supabase.auth.getUser(token);
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+        
+        req.user = {
+          ...user,
+          role: profile?.role || user.app_metadata?.role || user.user_metadata?.role || 'user'
+        };
+      }
+    }
+    next();
+  } catch (e) {
+    // Ignore error, just proceed as anon
+    next();
   }
 };
 
@@ -66,6 +115,7 @@ const requireBeneficiary = requireRole(['admin', 'beneficiary']);
 
 module.exports = {
   verifyToken,
+  detectUser,
   requireRole,
   requireAdmin,
   requireStaff,

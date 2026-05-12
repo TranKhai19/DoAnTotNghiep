@@ -145,13 +145,31 @@ async function sendTransaction(methodName, args, options = {}) {
 async function createCampaign(targetAmount) {
   const parsedTargetAmount = toPositiveBigInt(targetAmount, 'targetAmount');
 
-  return sendTransaction('createCampaign', [parsedTargetAmount], {
+  const result = await sendTransaction('createCampaign', [parsedTargetAmount], {
     adminAction: true,
     socketEventName: 'onchain:createCampaign',
     socketPayload: {
       targetAmount: parsedTargetAmount.toString()
     }
   });
+
+  // Tìm sự kiện CampaignCreated trong logs
+  if (result.receipt && result.receipt.logs) {
+    // Ethers v6 dùng logs, v5 dùng events. Giả sử v6 dựa trên codebase.
+    // Lấy ID từ event (argument đầu tiên)
+    try {
+      // Logic parse event tùy phiên bản ethers và setup interface
+      // Ở đây ta có thể parse từ receipt nếu contract interface được expose
+      const { data, topics } = result.receipt.logs[0]; 
+      // campaignId là indexed parameter đầu tiên (topic 1)
+      const campaignId = ethers.toQuantity(topics[1]);
+      return { ...result, campaignId: BigInt(campaignId).toString() };
+    } catch (e) {
+      console.warn('⚠️ Could not parse campaignId from logs:', e.message);
+    }
+  }
+
+  return result;
 }
 
 async function getCampaign(campaignId) {
@@ -180,30 +198,34 @@ async function recordDonation(campaignId, bankRef, amount, donor) {
   });
 }
 
-async function disburseFunds(campaignId, amount, beneficiaryId) {
+async function disburseFunds(campaignId, amount, beneficiaryId, reasonHash = '') {
   const parsedCampaignId = toPositiveBigInt(campaignId, 'campaignId');
   const parsedAmount = toPositiveBigInt(amount, 'amount');
   const parsedBeneficiaryId = ensureNonEmptyString(beneficiaryId, 'beneficiaryId');
+  const parsedReasonHash = typeof reasonHash === 'string' ? reasonHash : '';
 
-  return sendTransaction('disburseFunds', [parsedCampaignId, parsedAmount, parsedBeneficiaryId], {
+  return sendTransaction('disburseFunds', [parsedCampaignId, parsedAmount, parsedBeneficiaryId, parsedReasonHash], {
     adminAction: true,
     socketEventName: 'onchain:disburseFunds',
     socketPayload: {
       campaignId: parsedCampaignId.toString(),
       amount: parsedAmount.toString(),
-      beneficiaryId: parsedBeneficiaryId
+      beneficiaryId: parsedBeneficiaryId,
+      reasonHash: parsedReasonHash
     }
   });
 }
 
-async function closeCampaign(campaignId) {
+async function closeCampaign(campaignId, proofHash = '') {
   const parsedCampaignId = toPositiveBigInt(campaignId, 'campaignId');
+  const parsedProofHash = typeof proofHash === 'string' ? proofHash : '';
 
-  return sendTransaction('closeCampaign', [parsedCampaignId], {
+  return sendTransaction('closeCampaign', [parsedCampaignId, parsedProofHash], {
     adminAction: true,
     socketEventName: 'onchain:closeCampaign',
     socketPayload: {
-      campaignId: parsedCampaignId.toString()
+      campaignId: parsedCampaignId.toString(),
+      proofHash: parsedProofHash
     }
   });
 }

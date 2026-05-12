@@ -30,15 +30,35 @@ const initBlockchainEventProcessor = async () => {
 
     console.log('🔗 Initializing blockchain event processor...');
 
-    // Listen to DonationReceived event
-    fundChainContract.on('DonationRecorded', async (campaignId, bankRef, amount, event) => {
-      await processDonationReceivedEvent({
-        campaignId: campaignId.toString(),
-        bankRef,
-        amount: amount.toString(),
-        event: event
-      });
+    // Log khi có client kết nối để dễ debug
+    const io = socketService.getIo();
+    io.on('connection', (socket) => {
+      console.log(`📱 Client connected to Socket.io: ${socket.id}`);
     });
+
+    // Listen to DonationRecorded events
+    // Ethers v6 signature: (campaignId, bankRef, amount, eventPayload)
+    fundChainContract.on('DonationRecorded', async (campaignId, bankRef, amount, payload) => {
+      try {
+        console.log('📦 Full Event Payload:', JSON.stringify(payload, (key, value) => typeof value === 'bigint' ? value.toString() : value, 2));
+        
+        // Cách lấy txHash an toàn cho Ethers v6
+        const txHash = payload.log?.transactionHash || payload.transactionHash || (payload.log && payload.log.hash) || 'unknown';
+        console.log(`🔔 New on-chain event: DonationRecorded. Tx: ${txHash}`);
+        
+        await processDonationReceivedEvent({ 
+          campaignId: campaignId.toString(), 
+          bankRef, 
+          amount: amount.toString(), 
+          event: { transactionHash: txHash, blockNumber: payload.log?.blockNumber } 
+        });
+      } catch (err) {
+        console.error('❌ Error in DonationRecorded listener:', err);
+      }
+    });
+
+    // TEST SOCKET: Xóa bot test - gây lỗi async response
+    // Chỉ emit khi có event thực tế từ blockchain
 
     // Listen to CampaignCreated event
     fundChainContract.on('CampaignCreated', async (campaignId, targetAmount, event) => {
@@ -100,76 +120,34 @@ const processDonationReceivedEvent = async (eventData) => {
       payload: eventData
     });
 
-    // Check if donation already exists (deduplication by tx_hash)
-    const { data: existingDonation, error: checkError } = await supabase
-      .from(DONATIONS_TABLE)
-      .select('id')
-      .eq('tx_hash', txHash)
-      .single();
-
-    if (checkError && checkError.code !== 'PGRST116') {
-      throw new Error(`Database error checking donation: ${checkError.message}`);
+    console.log('🚀 processDonationReceivedEvent triggered!');
+    
+    // Phát socket nổ hũ nếu là sự kiện từ blockchain (dành cho người dùng đang xem trang)
+    try {
+      const { getIo } = require('./socketService');
+      const { getCampaignById } = require('../models/Campaign');
+      const io = getIo();
+      const campaign = await getCampaignById(campaignId);
+      
+      if (io && campaign) {
+        console.log(`📣 Emitting donation:confirmed for campaign ${campaign.id} ($${amount})`);
+        io.emit('donation:confirmed', {
+          campaignId: campaign.id,
+          transactionId: bankRef || `onchain_${txHash?.substring(0, 10)}`,
+          amount: parseFloat(amount),
+          newRaisedAmount: campaign.raised_amount,
+          txHash,
+          donorName: 'Người dùng On-chain',
+          campaignTitle: campaign.title,
+          timestamp: new Date().toISOString()
+        });
+      }
+    } catch (socketErr) {
+      console.warn('⚠️ [SOCKET-DEBUG] Error emitting socket:', socketErr.message);
+      console.warn('Stack trace:', socketErr.stack);
     }
 
-    if (existingDonation) {
-      console.log(`⏭️ Donation already recorded for txHash=${txHash}, skipping...`);
-      return;
-    }
-
-    // Create donation record
-    const { data: donation, error: insertError } = await supabase
-      .from(DONATIONS_TABLE)
-      .insert([{
-        campaign_id: campaignId,
-        amount: parseFloat(amount),
-        tx_hash: txHash,
-        bank_transaction_id: bankRef || null,
-        message: `Recorded from blockchain event: ${bankRef}`,
-        status: 'success',
-        created_at: new Date().toISOString()
-      }])
-      .select()
-      .single();
-
-    if (insertError) {
-      throw new Error(`Failed to create donation record: ${insertError.message}`);
-    }
-
-    console.log(`✅ Donation created: ${donation.id} (amount: ${amount})`);
-
-    // Update campaign.raised_amount
-    const { data: campaign, error: fetchError } = await supabase
-      .from(CAMPAIGNS_TABLE)
-      .select('raised_amount')
-      .eq('id', campaignId)
-      .single();
-
-    if (fetchError) {
-      throw new Error(`Failed to fetch campaign: ${fetchError.message}`);
-    }
-
-    const newRaisedAmount = (parseFloat(campaign.raised_amount) || 0) + parseFloat(amount);
-
-    const { error: updateError } = await supabase
-      .from(CAMPAIGNS_TABLE)
-      .update({ raised_amount: newRaisedAmount })
-      .eq('id', campaignId);
-
-    if (updateError) {
-      throw new Error(`Failed to update campaign raised_amount: ${updateError.message}`);
-    }
-
-    console.log(`✅ Campaign ${campaignId} raised_amount updated: ${newRaisedAmount}`);
-
-    // Emit real-time update to Socket.io clients
-    if (socketService && socketService.getIo) {
-      socketService.getIo().emit('DonationProcessed', {
-        campaignId,
-        amount,
-        txHash,
-        newRaisedAmount
-      });
-    }
+    console.log(`✅ Event DonationRecorded audited successfully.`);
   } catch (error) {
     console.error('❌ Error processing DonationRecorded event:', error);
     // Store failed event for retry
@@ -303,6 +281,7 @@ const processCampaignClosedEvent = async (eventData) => {
 const storeBlockchainEvent = async (eventData) => {
   try {
     const { eventName, campaignId, amount, bankRef, txHash, blockNumber, metadata, payload } = eventData;
+    const replacer = (key, value) => typeof value === 'bigint' ? value.toString() : value;
 
     const { error } = await supabase
       .from(EVENTS_TABLE)
@@ -313,8 +292,8 @@ const storeBlockchainEvent = async (eventData) => {
         bank_transaction_id: bankRef || null,
         tx_hash: txHash,
         block_number: blockNumber,
-        metadata: metadata ? JSON.stringify(metadata) : null,
-        payload: JSON.stringify(payload),
+        metadata: metadata ? JSON.stringify(metadata, replacer) : null,
+        payload: JSON.stringify(payload, replacer),
         processed_at: new Date().toISOString(),
         status: 'processed'
       }]);
@@ -333,15 +312,16 @@ const storeBlockchainEvent = async (eventData) => {
 const storeFailedEvent = async (eventData, errorMessage) => {
   try {
     const { eventName, campaignId, amount, txHash } = eventData;
+    const replacer = (key, value) => typeof value === 'bigint' ? value.toString() : value;
 
     const { error } = await supabase
-      .from(EVENTS_TABLE)
+      .from(FAILED_EVENTS_TABLE)
       .insert([{
         event_name: eventName,
         campaign_id: campaignId,
         amount: amount ? parseFloat(amount) : null,
         tx_hash: txHash,
-        payload: JSON.stringify(eventData),
+        payload: JSON.stringify(eventData, replacer),
         processed_at: new Date().toISOString(),
         status: 'failed',
         error_message: errorMessage
@@ -364,7 +344,7 @@ const processFailedEvents = async () => {
       .from(EVENTS_TABLE)
       .select('*')
       .eq('status', 'failed')
-      .order('created_at', { ascending: true })
+      .order('processed_at', { ascending: true })
       .limit(10);
 
     if (error) {

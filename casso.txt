@@ -1,0 +1,4 @@
+ClientID: 45d54578-1d33-42ed-839b-42f0754e8f7c
+API Key: f07fe279-88aa-4fcf-bad7-4f083f07d71c
+Checksum Key: 61a547e64fc22f1ec1bfc682d609aa621e063f154d19357abc5f6795be8caed3
+

@@ -19,17 +19,33 @@ if (!PRIVATE_KEY || !CONTRACT_ADDRESS || rpcUrls.length === 0) {
   );
 }
 
-const providers = rpcUrls.map((rpcUrl) => new ethers.JsonRpcProvider(rpcUrl));
+// Dùng staticNetwork để ngăn ethers.js v6 tự động polling detect network
+// khi Hardhat node chưa khởi động (tránh spam log)
+const HARDHAT_NETWORK = new ethers.Network('hardhat', 31337);
+
+function createProvider(rpcUrl) {
+  const p = new ethers.JsonRpcProvider(rpcUrl, HARDHAT_NETWORK, {
+    staticNetwork: HARDHAT_NETWORK,
+    polling: false,
+    batchMaxCount: 1,
+  });
+  // Tắt polling interval để không reconnect vô tận
+  p.pollingInterval = 0;
+  return p;
+}
+
+const providers = rpcUrls.map(createProvider);
 const wallets = providers.map((currentProvider) => new ethers.Wallet(PRIVATE_KEY, currentProvider));
+
 
 const fundChainAbi = [
   'function createCampaign(uint256 _targetAmount) external',
   'function recordDonation(uint256 _campaignId, string _bankRef, uint256 _amount, string _donor) external',
-  'function disburseFunds(uint256 _campaignId, uint256 _amount, string _beneficiaryId) external',
-  'function closeCampaign(uint256 _campaignId) external',
+  'function disburseFunds(uint256 _campaignId, uint256 _amount, string _beneficiaryId, string _reasonHash) external',
+  'function closeCampaign(uint256 _campaignId, string _proofHash) external',
   'function campaigns(uint256) external view returns (uint256 id,uint256 targetAmount,uint256 totalRaised,uint256 totalDisbursed,bool isActive)',
   'function getCampaignDonations(uint256 _campaignId) external view returns (tuple(string bankRef,string donor,uint256 amount,uint256 timestamp)[])',
-  'function getCampaignDisbursements(uint256 _campaignId) external view returns (tuple(string beneficiaryId,uint256 amount,uint256 timestamp)[])',
+  'function getCampaignDisbursements(uint256 _campaignId) external view returns (tuple(string beneficiaryId,uint256 amount,uint256 timestamp,string reasonHash)[])',
   'event CampaignCreated(uint256 indexed campaignId,uint256 targetAmount)',
   'event DonationRecorded(uint256 indexed campaignId,string indexed bankRef,uint256 amount)',
   'event FundsDisbursed(uint256 indexed campaignId,uint256 amount,string beneficiaryId)',

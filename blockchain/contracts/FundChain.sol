@@ -12,6 +12,7 @@ contract FundChain is AccessControl {
         uint256 totalRaised;
         uint256 totalDisbursed;
         bool isActive;
+        string proofHash;
     }
 
     struct Donation {
@@ -25,6 +26,7 @@ contract FundChain is AccessControl {
         string beneficiaryId; // CMND/CCCD hoặc identifier của người thụ hưởng
         uint256 amount;
         uint256 timestamp;
+        string reasonHash;
     }
 
     // Biến lưu trữ ID tiếp theo cho chiến dịch
@@ -43,8 +45,8 @@ contract FundChain is AccessControl {
     // --- EVENTS ---
     event CampaignCreated(uint256 indexed campaignId, uint256 targetAmount);
     event DonationRecorded(uint256 indexed campaignId, string indexed bankRef, uint256 amount);
-    event FundsDisbursed(uint256 indexed campaignId, uint256 amount, string beneficiaryId);
-    event CampaignClosed(uint256 indexed campaignId);
+    event FundsDisbursed(uint256 indexed campaignId, uint256 amount, string beneficiaryId, string reasonHash);
+    event CampaignClosed(uint256 indexed campaignId, string proofHash);
 
     // --- CONSTRUCTOR ---
     constructor() {
@@ -74,7 +76,8 @@ contract FundChain is AccessControl {
             targetAmount: _targetAmount,
             totalRaised: 0,
             totalDisbursed: 0,
-            isActive: true
+            isActive: true,
+            proofHash: ""
         });
 
         emit CampaignCreated(campaignId, _targetAmount);
@@ -120,7 +123,8 @@ contract FundChain is AccessControl {
     function disburseFunds(
         uint256 _campaignId,
         uint256 _amount,
-        string calldata _beneficiaryId
+        string calldata _beneficiaryId,
+        string calldata _reasonHash
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         Campaign storage campaign = campaigns[_campaignId];
         require(campaign.id != 0, "Campaign does not exist");
@@ -135,23 +139,25 @@ contract FundChain is AccessControl {
         Disbursement memory newDisbursement = Disbursement({
             beneficiaryId: _beneficiaryId,
             amount: _amount,
-            timestamp: block.timestamp
+            timestamp: block.timestamp,
+            reasonHash: _reasonHash
         });
 
         campaignDisbursements[_campaignId].push(newDisbursement);
 
-        emit FundsDisbursed(_campaignId, _amount, _beneficiaryId);
+        emit FundsDisbursed(_campaignId, _amount, _beneficiaryId, _reasonHash);
     }
 
     /**
      * @dev Đóng kết thúc chiến dịch.
      * Cần quyền Admin.
      */
-    function closeCampaign(uint256 _campaignId) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function closeCampaign(uint256 _campaignId, string calldata _proofHash) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(campaigns[_campaignId].isActive, "Campaign is already closed");
         campaigns[_campaignId].isActive = false;
+        campaigns[_campaignId].proofHash = _proofHash;
         
-        emit CampaignClosed(_campaignId);
+        emit CampaignClosed(_campaignId, _proofHash);
     }
 
     // --- VIEW FUNCTIONS ---

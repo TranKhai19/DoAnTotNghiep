@@ -65,11 +65,21 @@ const getAllCampaigns = async ({ status, approval_status, created_by } = {}) => 
 // ─────────────────────────────────────────────────────────────────────────────
 const getCampaignById = async (id) => {
   try {
-    const { data, error } = await supabase
-      .from(TABLE_NAME)
-      .select('*')
-      .eq('id', id)
-      .single();
+    let query = supabase.from(TABLE_NAME).select('*');
+
+    const isInteger = !isNaN(id) && Number.isInteger(Number(id));
+    console.log(`🔍 getCampaignById called with: ${id} (Type: ${typeof id}, isInteger: ${isInteger})`);
+
+    // Nếu ID là số nguyên (hoặc chuỗi số), tìm theo onchain_campaign_id
+    if (isInteger) {
+      console.log(`➡️  Searching by onchain_campaign_id: ${parseInt(id)}`);
+      query = query.eq('onchain_campaign_id', parseInt(id));
+    } else {
+      console.log(`➡️  Searching by UUID id: ${id}`);
+      query = query.eq('id', id);
+    }
+
+    const { data, error } = await query.maybeSingle();
 
     // PGRST116 = "no rows found" — tất cả lỗi khác mới throw
     if (error && error.code !== 'PGRST116') throw error;
@@ -141,7 +151,18 @@ const createCampaign = async (campaignData) => {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) throw new Error(error.message);
+
+    // Automatically generate qr_code using the end of UUID if not provided
+    if (!data.qr_code && data.id) {
+      const generatedQrCode = `QG${data.id.slice(-6).toUpperCase()}`;
+      await supabase
+        .from(TABLE_NAME)
+        .update({ qr_code: generatedQrCode })
+        .eq('id', data.id);
+      data.qr_code = generatedQrCode;
+    }
+
     return data;
   } catch (error) {
     console.error('Error creating campaign:', error);

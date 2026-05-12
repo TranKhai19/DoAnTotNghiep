@@ -4,6 +4,7 @@ import { SocketProvider } from './components/SocketProvider';
 import './App.css';
 import AdminDashboard from './AdminDashboard';
 
+import { Toaster } from 'react-hot-toast';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import Newsletter from './components/Newsletter';
@@ -17,6 +18,8 @@ import RegisterPage from './pages/RegisterPage';
 import LoginPage from './pages/LoginPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ChangePasswordPage from './pages/ChangePasswordPage';
+import BlockExplorerPage from './pages/BlockExplorerPage';
+
 
 const MainLayout = () => (
   <div className="app">
@@ -31,6 +34,8 @@ const MainLayout = () => (
       <Route path="/login" element={<LoginPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/change-password" element={<ChangePasswordPage />} />
+      <Route path="/explorer" element={<BlockExplorerPage />} />
+
     </Routes>
     <Newsletter />
     <Footer />
@@ -40,6 +45,7 @@ const MainLayout = () => (
 function App() {
   return (
     <SocketProvider>
+      <Toaster position="top-right" reverseOrder={false} />
       <Router>
         <Routes>
           <Route path="/admin/*" element={<AdminDashboard />} />

@@ -5,6 +5,9 @@ const cors = require('cors');
 const campaignRoutes = require('./routes/campaigns');
 const webhookRoutes = require('./routes/webhooks');
 const authRoutes = require('./routes/authRoutes');
+const disbursementRoutes = require('./routes/disbursements');
+const reportRoutes = require('./routes/reports');
+const paymentRoutes = require('./routes/payments');
 
 const socketService = require('./services/socketService');
 const { initWebhookProcessor } = require('./services/queueService');
@@ -23,6 +26,12 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Global Traffic Debugger
+app.use((req, res, next) => {
+  console.log(`🌐 [TRAFFIC] ${req.method} ${req.originalUrl}`);
+  next();
+});
+
 // Routes
 app.get('/', (req, res) => {
   res.json({ message: 'Server is running' });
@@ -36,6 +45,9 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/campaigns', campaignRoutes);
 app.use('/api/webhooks', webhookRoutes);
+app.use('/api/disbursements', disbursementRoutes);
+app.use('/api/reports', reportRoutes);
+app.use('/api/payments', paymentRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -49,7 +61,9 @@ const server = http.createServer(app);
 const io = socketService.init(server, {
   cors: {
     origin: '*'
-  }
+  },
+  pingTimeout: 60000,
+  pingInterval: 25000
 });
 
 // After io is initialized, initialize blockchain event processor (async)
@@ -75,6 +89,7 @@ const io = socketService.init(server, {
 
   // Start server after all async initializations
   server.listen(PORT, () => {
+    console.log('🚀 [SYSTEM] SERVER RESTARTED - VERSION 1.0.1 (DEBUG ENABLED)');
     console.log(`Server is running on port ${PORT}`);
   });
 })();

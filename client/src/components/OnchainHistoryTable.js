@@ -12,8 +12,8 @@ const OnchainHistoryTable = ({ campaignId }) => {
         const fetchHistory = async () => {
             setLoading(true);
             try {
-                // Giả sử API endpoint được expose: GET /api/campaigns/onchain/:id/history
-                const res = await fetch(`http://localhost:3000/api/campaigns/onchain/${campaignId}/history`);
+                const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+                const res = await fetch(`${apiBase}/api/campaigns/${campaignId}/history`);
                 const json = await res.json();
                 if (json.success) {
                     setHistory(json.data);
@@ -85,7 +85,7 @@ const OnchainHistoryTable = ({ campaignId }) => {
                             <th style={{ padding: '16px 12px', color: 'var(--text-muted)', fontWeight: 600 }}>TxHash</th>
                             <th style={{ padding: '16px 12px', color: 'var(--text-muted)', fontWeight: 600 }}>Loại giao dịch</th>
                             <th style={{ padding: '16px 12px', color: 'var(--text-muted)', fontWeight: 600 }}>Từ ví</th>
-                            <th style={{ padding: '16px 12px', color: 'var(--text-muted)', fontWeight: 600 }}>Số tiền ($)</th>
+                            <th style={{ padding: '16px 12px', color: 'var(--text-muted)', fontWeight: 600 }}>Số tiền (₫)</th>
                             <th style={{ padding: '16px 12px', color: 'var(--text-muted)', fontWeight: 600 }}>Trạng thái</th>
                         </tr>
                     </thead>
@@ -122,7 +122,7 @@ const OnchainHistoryTable = ({ campaignId }) => {
                                 </td>
                                 <td style={{ padding: '16px 12px', fontSize: 14, fontFamily: 'monospace' }}>{item.from}</td>
                                 <td style={{ padding: '16px 12px', fontSize: 15, fontWeight: 600 }}>
-                                    {item.amount > 0 ? `$${item.amount.toLocaleString()}` : '-'}
+                                    {item.amount > 0 ? `${item.amount.toLocaleString()}₫` : '-'}
                                 </td>
                                 <td style={{ padding: '16px 12px', fontSize: 14 }}>
                                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: item.status === 'Success' ? '#137333' : item.status === 'Failed' ? '#c5221f' : '#f29900' }}>

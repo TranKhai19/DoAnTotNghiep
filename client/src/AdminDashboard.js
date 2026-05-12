@@ -3,8 +3,29 @@ import { Routes, Route, Link, useLocation, useNavigate, useParams } from 'react-
 import { supabase } from './supabaseClient';
 import './AdminDashboard.css';
 import StaffCampaignPosts from './pages/admin/StaffCampaignPosts';
+import DisbursementPage from './pages/admin/DisbursementPage';
+import ReportPage from './pages/admin/ReportPage';
 import BeneficiaryForm from './components/BeneficiaryForm';
 import { z } from 'zod';
+
+const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+
+const getAuthHeader = () => {
+  let token = localStorage.getItem('access_token');
+  if (!token) {
+    const projectRef = 'mfyncysdujxdeeypppbk';
+    const sbKey = `sb-${projectRef}-auth-token`;
+    const sbData = localStorage.getItem(sbKey);
+    if (sbData) {
+      try {
+        const parsed = JSON.parse(sbData);
+        token = parsed.access_token;
+      } catch (e) {}
+    }
+  }
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
 
 // Zod Schema for Create Campaign
 export const campaignSchema = z.object({
@@ -33,12 +54,22 @@ const AdminSidebar = ({ role }) => {
   return (
     <aside className="admin-sidebar">
       <div className="admin-logo">
-        <div className="logo-icon bg-primary text-white rounded" style={{padding: 4, display:'inline-block', marginRight: 8, backgroundColor: 'var(--primary)'}}>HT</div>
-        <h2>Khu vực {role === 'admin' ? 'Tổ chức' : 'Nhân viên'}</h2>
+        <div className="logo-icon">HT</div>
+        <h2>{role === 'admin' ? 'Admin Portal' : 'Staff Dashboard'}</h2>
       </div>
       <nav className="admin-nav">
         <Link to="/admin" className={`admin-nav-item ${isActive('/admin') && location.pathname === '/admin' ? 'active' : ''}`}>
           <span className="icon">📊</span> Tổng quan
+        </Link>
+        {/* Admin chung */}
+        <Link to="/admin/disbursements" className={`admin-nav-item ${isActive('/admin/disbursements')}`}>
+          <span className="icon">💸</span> Giải ngân
+        </Link>
+        <Link to="/admin/reports" className={`admin-nav-item ${isActive('/admin/reports')}`}>
+          <span className="icon">📋</span> Báo cáo nghiệm thu
+        </Link>
+        <Link to="/explorer" target="_blank" className="admin-nav-item">
+          <span className="icon">🔍</span> Block Explorer
         </Link>
         {role === 'admin' && (
           <>
@@ -58,9 +89,6 @@ const AdminSidebar = ({ role }) => {
             <Link to="/admin/campaign-posts" className={`admin-nav-item ${isActive('/admin/campaign-posts')}`}>
               <span className="icon">📝</span> Chiến dịch của tôi
             </Link>
-            <Link to="/admin/reports" className={`admin-nav-item ${isActive('/admin/reports')}`}>
-              <span className="icon">📉</span> Báo cáo
-            </Link>
           </>
         )}
       </nav>
@@ -75,10 +103,28 @@ const AdminSidebar = ({ role }) => {
 
 const AdminCampaigns = () => {
   const navigate = useNavigate();
-  const [campaigns, setCampaigns] = useState([
-    { id: '1', title: 'Giáo dục cho 500 trẻ mồ côi tại trung tâm...', raised: 2460, target: 5750, status: 'Đang chạy' },
-    { id: '2', title: 'Xây dựng 2 lớp học tình thương...', raised: 1450, target: 4200, status: 'Hoàn thành' },
-  ]);
+  const [campaigns, setCampaigns] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchCampaigns = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('campaigns')
+        .select('id, title, raised_amount, goal_amount, status, onchain_campaign_id')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setCampaigns(data || []);
+    } catch (err) {
+      console.error('Error fetching admin campaigns:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCampaigns();
+  }, []);
 
   useEffect(() => {
     const handleBlockchainUpdate = (e) => {
@@ -87,35 +133,21 @@ const AdminCampaigns = () => {
       if (type === 'recordDonation') {
         const donationAmount = parseFloat(data.amount) || 0;
         setCampaigns(prev => prev.map(c => {
-          if (c.id.toString() === data.campaignId?.toString()) {
-            return { ...c, raised: c.raised + donationAmount };
+          if (c.id.toString() === data.campaignId?.toString() || (c.onchain_campaign_id && c.onchain_campaign_id.toString() === data.campaignId?.toString())) {
+            return { ...c, raised_amount: (c.raised_amount || 0) + donationAmount };
           }
           return c;
         }));
-      } else if (type === 'createCampaign') {
-        setCampaigns(prev => [
-          {
-            id: Date.now().toString(), // temporary ID
-            title: 'Chiến dịch mới (Ghi nhận từ Onchain)',
-            raised: 0,
-            target: parseFloat(data.targetAmount) || 0,
-            status: 'Đang chạy',
-          },
-          ...prev
-        ]);
-      } else if (type === 'closeCampaign') {
-        setCampaigns(prev => prev.map(c => {
-          if (c.id.toString() === data.campaignId?.toString()) {
-            return { ...c, status: 'Hoàn thành' };
-          }
-          return c;
-        }));
+      } else if (type === 'createCampaign' || type === 'closeCampaign') {
+        fetchCampaigns(); // Refresh list on major state changes
       }
     };
 
     window.addEventListener('blockchain:update', handleBlockchainUpdate);
     return () => window.removeEventListener('blockchain:update', handleBlockchainUpdate);
   }, []);
+
+  if (loading) return <div className="admin-page fade-in">Đang tải danh sách chiến dịch...</div>;
 
   return (
     <div className="admin-page fade-in">
@@ -139,28 +171,33 @@ const AdminCampaigns = () => {
                 </tr>
             </thead>
             <tbody>
-                {campaigns.map(c => (
+                {campaigns.length > 0 ? campaigns.map(c => (
                 <tr key={c.id}>
                     <td>
                        <div className="fw-600 color-dark">{c.title}</div>
+                       <div className="text-muted" style={{fontSize: 11}}>#{c.id.slice(0, 8)}</div>
                     </td>
                     <td>
-                       <div className="fw-600 text-primary">${c.raised}</div>
+                       <div className="fw-600 text-success">{parseInt(c.raised_amount || 0).toLocaleString()}đ</div>
                        <div className="admin-progress-sm mt-4">
-                          <div className="admin-progress-bar" style={{width: `${Math.min(100, (c.raised/c.target)*100)}%`}}></div>
+                          <div className="admin-progress-bar" style={{width: `${Math.min(100, ((c.raised_amount || 0)/(c.goal_amount || 1))*100)}%`}}></div>
                        </div>
                     </td>
-                    <td>${c.target}</td>
+                    <td className="fw-500">{parseInt(c.goal_amount || 0).toLocaleString()}đ</td>
                     <td>
-                       <span className={`badge ${c.status === 'Hoàn thành' ? 'badge-completed' : 'badge-success'}`}>
+                       <span className={`badge ${c.status === 'Hoàn thành' || c.status === 'completed' ? 'badge-completed' : 'badge-success'}`}>
                           {c.status}
                        </span>
                     </td>
                     <td>
-                       <button onClick={() => navigate(`/admin/campaign/${c.id}`)} className="btn btn-outline" style={{padding: '4px 12px', fontSize: 13}}>Hồ sơ & Thụ hưởng</button>
+                       <button onClick={() => navigate(`/admin/campaign/${c.id}`)} className="btn btn-outline" style={{padding: '6px 16px', fontSize: 13}}>Chi tiết</button>
                     </td>
                 </tr>
-                ))}
+                )) : (
+                  <tr>
+                    <td colSpan="5" className="text-center py-40 text-muted">Chưa có chiến dịch nào được tạo.</td>
+                  </tr>
+                )}
             </tbody>
             </table>
         </div>
@@ -175,8 +212,23 @@ const CampaignDetails = () => {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Dữ liệu mẫu (Tương lai bạn có thể query từ bảng campaigns)
-    setCampaign({ id, title: `Chiến dịch demo #${id}`, target: 5000, raised: 100 });
+    const fetchCampaign = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`${API_BASE}/api/campaigns/${id}`, {
+          headers: { ...getAuthHeader() }
+        });
+        const data = await res.json();
+        if (data.success) {
+          setCampaign(data.data);
+        }
+      } catch (err) {
+        console.error('Error fetching campaign details:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchCampaign();
   }, [id]);
 
   const handleAddBeneficiarySuccess = () => {
@@ -197,8 +249,8 @@ const CampaignDetails = () => {
         <div className="admin-card" style={{padding: 24, alignSelf: 'start'}}>
            <h3 className="mb-16" style={{color: 'var(--primary)'}}>Chi tiết chiến dịch</h3>
            <div className="mb-16"><strong className="text-muted">Tên chiến dịch:</strong> <div className="fw-600 mt-4">{campaign?.title}</div></div>
-           <div className="mb-16"><strong className="text-muted">Mục tiêu quyên góp:</strong> <div className="mt-4">${campaign?.target}</div></div>
-           <div className="mb-16"><strong className="text-muted">Đã quyên góp:</strong> <div className="mt-4 text-success fw-600">${campaign?.raised}</div></div>
+           <div className="mb-16"><strong className="text-muted">Mục tiêu quyên góp:</strong> <div className="mt-4">${(campaign?.goal_amount || 0).toLocaleString()}</div></div>
+           <div className="mb-16"><strong className="text-muted">Đã quyên góp:</strong> <div className="mt-4 text-success fw-600">${(campaign?.raised_amount || 0).toLocaleString()}</div></div>
            <button className="btn btn-outline w-100 mt-8">Chỉnh sửa thông tin chiến dịch</button>
         </div>
 
@@ -369,7 +421,7 @@ const CreateCampaign = ({ user }) => {
 
     setLoading(true);
 
-    const newCampaign = {
+    const campaignToCreate = {
       ...rawData,
       raised_amount: 0,
       qr_code: rawData.qr_code || null,
@@ -378,14 +430,29 @@ const CreateCampaign = ({ user }) => {
       created_by: user?.id
     };
 
-    const { error } = await supabase.from('campaigns').insert([newCampaign]);
-
-    setLoading(false);
-    if (error) {
-      alert("Lỗi khi tạo chiến dịch: " + error.message);
-    } else {
-      alert("Tạo chiến dịch thành công!");
-      navigate('/admin');
+    try {
+      const res = await fetch(`${API_BASE}/api/campaigns`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader()
+        },
+        body: JSON.stringify(campaignToCreate)
+      });
+      
+      const result = await res.json();
+      
+      setLoading(false);
+      if (result.success) {
+        alert("Tạo chiến dịch thành công!");
+        navigate('/admin');
+      } else {
+        alert("Lỗi khi tạo chiến dịch: " + result.error);
+      }
+    } catch (err) {
+      setLoading(false);
+      console.error('Error creating campaign:', err);
+      alert("Lỗi kết nối Server khi tạo chiến dịch");
     }
   };
 
@@ -399,17 +466,17 @@ const CreateCampaign = ({ user }) => {
       </div>
       <div className="admin-card" style={{ maxWidth: 850 }}>
          <form onSubmit={handleCreate} noValidate>
-            <div style={{ padding: 24, borderBottom: '1px solid #eaeaea' }}>
-               <h3 style={{ fontSize: 16, marginBottom: 24, color: 'var(--primary)' }}>Thông tin cơ bản</h3>
+            <div className="admin-card-section">
+               <h3 className="section-title">Thông tin cơ bản</h3>
                <div className="form-group mb-24">
-                  <label className="admin-label">Tiêu đề chiến dịch (Title) <span className="text-danger">*</span></label>
-                  <input type="text" name="title" className="admin-input" placeholder="Ví dụ: Cứu trợ đồng bào lũ lụt miền Bắc" style={{ borderColor: errors.title ? 'red' : '' }} />
-                  {errors.title && <div style={{ color: 'red', fontSize: '13px', marginTop: '4px' }}>{errors.title}</div>}
+                  <label className="admin-label">Tiêu đề chiến dịch <span className="text-danger">*</span></label>
+                  <input type="text" name="title" className={`admin-input ${errors.title ? 'is-invalid' : ''}`} placeholder="Ví dụ: Cứu trợ đồng bào lũ lụt miền Bắc" />
+                  {errors.title && <div className="error-text">{errors.title}</div>}
                </div>
                <div className="form-group mb-24">
-                  <label className="admin-label">Mô tả giới thiệu (Description) <span className="text-danger">*</span></label>
-                  <textarea name="description" className="admin-input" rows="5" placeholder="Chia sẻ chi tiết, mạch lạc về hoàn cảnh và mục đích của chiến dịch..." style={{ borderColor: errors.description ? 'red' : '' }}></textarea>
-                  {errors.description && <div style={{ color: 'red', fontSize: '13px', marginTop: '4px' }}>{errors.description}</div>}
+                  <label className="admin-label">Mô tả giới thiệu <span className="text-danger">*</span></label>
+                  <textarea name="description" className={`admin-input ${errors.description ? 'is-invalid' : ''}`} rows="5" placeholder="Chia sẻ chi tiết, mạch lạc về hoàn cảnh và mục đích của chiến dịch..."></textarea>
+                  {errors.description && <div className="error-text">{errors.description}</div>}
                </div>
                
                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px' }}>
@@ -540,14 +607,8 @@ const PersonnelManagement = () => {
   )
 };
 
-// StaffCampaignPosts is now imported from ./pages/admin/StaffCampaignPosts
+// StaffCampaignPosts, DisbursementPage, ReportPage are now imported from ./pages/admin/
 
-const StaffReports = () => (
-  <div className="admin-page fade-in">
-     <h2 className="mb-8">Xuất báo cáo</h2>
-     <p className="text-muted">Tính năng dành riêng cho Staff đang được phát triển...</p>
-  </div>
-);
 
 const AdminDashboard = () => {
   const [role, setRole] = useState(null);
@@ -575,11 +636,12 @@ const AdminDashboard = () => {
       <div className="admin-main-content">
         <header className="admin-topbar">
           <div className="admin-search-wrap">
-            <svg className="admin-search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-            <input type="text" className="admin-search-input" placeholder="Tìm kiếm chiến dịch, tổ chức..." />
+            <svg className="admin-search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input type="text" className="admin-search-input" placeholder="Search campaigns, reports, or tx hash..." />
           </div>
           <div className="admin-profile">
-            <span className="fw-500 uppercase">{role}</span>
+            <div className="role-badge">{role}</div>
+            <div className="avatar">{user?.email?.charAt(0).toUpperCase()}</div>
           </div>
         </header>
         <div className="admin-content-area">
@@ -597,12 +659,14 @@ const AdminDashboard = () => {
             )}
 
             {/* Staff Routes */}
-            {role === 'staff' && (
-              <>
-                <Route path="/campaign-posts" element={<StaffCampaignPosts user={user} />} />
-                <Route path="/reports" element={<StaffReports />} />
-              </>
-            )}
+             {/* Shared Routes */}
+             <Route path="/disbursements" element={<DisbursementPage user={user} role={role} />} />
+             <Route path="/reports" element={<ReportPage user={user} role={role} />} />
+
+             {/* Staff Specific */}
+             {role === 'staff' && (
+               <Route path="/campaign-posts" element={<StaffCampaignPosts user={user} />} />
+             )}
           </Routes>
         </div>
       </div>

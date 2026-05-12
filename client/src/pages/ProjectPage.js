@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import ProjectCard from '../components/ProjectCard';
 
 const ProjectHero = () => (
@@ -26,25 +26,57 @@ const CategoryIcon = ({ label }) => (
 );
 
 const ProjectPage = () => {
-   const topProjects = [
-      { img: "/assets/Visily-Export-to-Image-Image 138-2026-03-14.png", cat: "Giáo dục", loc: "Syria", title: "Giáo dục cho 500 trẻ mồ côi tại Syria", desc: "Laborum elit id aliquip in id deserunt fugiat proident ex anim labore id magna anim magna irure id.", raised: "2,460", target: "5,750", percent: 42 },
-      { img: "/assets/Visily-Export-to-Image-Image 140-2026-03-14.png", cat: "Giáo dục", loc: "Haiti", title: "Giáo dục con gái. Giáo dục quốc gia - Sierra Leone", desc: "Magna do ut eiusmod in veniam anim qui ut aliquip aute voluptate magna anim dolore ullamco do irure.", raised: "3,400", target: "7,500", percent: 45 },
-      { img: "/assets/Visily-Export-to-Image-Image 141-2026-03-14.png", cat: "Thực phẩm", loc: "USA", title: "Nuôi dưỡng hy vọng: Phục vụ thức ăn cho người đói", desc: "Elit duis ullamco commodo ad laboris dolor dolore proident. Ad in veniam enim excepteur enim aute adipisicing duis.", raised: "2,150", target: "5,000", percent: 43 },
-      { img: "/assets/Visily-Export-to-Image-Image 120-2026-03-14.png", cat: "Ứng phó thiên tai", loc: "Morocco", title: "Hỗ trợ cộng đồng High Atlas sau động đất", desc: "Eiusmod veniam sit commodo id ad dolor qui proident quis amet veniam exercitation.", raised: "1,050", target: "6,000", percent: 17 },
-      { img: "/assets/Visily-Export-to-Image-Image 118-2026-03-14.png", cat: "Ứng phó thiên tai", loc: "Morocco", title: "Cứu trợ động đất cho các cộng đồng ở Ma-rốc", desc: "Aute do ut et laborum esse nisi incididunt aute est commodo dolore ut in eu cillum ut ex tempor in.", raised: "1,450", target: "4,200", percent: 34 },
-      { img: "/assets/Visily-Export-to-Image-Image 119-2026-03-14.png", cat: "Giáo dục", loc: "Uganda", title: "Trao quyền cho bé gái: Để tự lập", desc: "Cupidatat ea ea occaecat elit in elit ex consectetur do esse enim quis labore ex cillum deserunt nostrud in adipisicing eiusmod.", raised: "2,100", target: "4,500", percent: 46 }
-   ];
+   const [projects, setProjects] = useState([]);
+   const [loading, setLoading] = useState(true);
+
+   useEffect(() => {
+     const fetchProjects = async () => {
+       try {
+         const res = await fetch('http://localhost:3000/api/campaigns?status=active');
+         const data = await res.json();
+         if (data.success) {
+           setProjects(data.data);
+         }
+       } catch (error) {
+         console.error('Error fetching campaigns:', error);
+       } finally {
+         setLoading(false);
+       }
+     };
+     fetchProjects();
+   }, []);
 
    const categories = ["Bảo vệ trẻ em", "Thiên tai", "Giáo dục", "Hành động khí hậu", "Năng lực", "Sức khỏe", "An ninh lương thực", "Động vật", "Hệ sinh thái", "Văn hóa", "Cộng đồng", "Thể thao"];
+
+   if (loading) return <div className="container" style={{padding: '100px 0', textAlign: 'center'}}>Đang tải danh sách chiến dịch...</div>;
 
    return (
        <div className="project-page">
            <ProjectHero />
            
            <section className="container section-spacing pt-0">
-               <h2 className="section-title text-left mb-32">Dự án quan trọng</h2>
+               <h2 className="section-title text-left mb-32">Dự án đang quyên góp</h2>
                <div className="p-grid-3">
-                   {topProjects.map((p, i) => <ProjectCard key={i} image={p.img} category={p.cat} location={p.loc} title={p.title} desc={p.desc} raised={p.raised} target={p.target} percent={p.percent} />)}
+                   {projects.length > 0 ? (
+                     projects.map((p) => (
+                       <ProjectCard 
+                        key={p.id} 
+                        id={p.id}
+                        image={p.image_url || "/assets/placeholder-project.png"} 
+                        category={p.category_name || "Cộng đồng"} 
+                        location="Việt Nam" 
+                        title={p.title} 
+                        desc={p.description} 
+                        raised={p.raised_amount?.toLocaleString()} 
+                        target={p.goal_amount?.toLocaleString()} 
+                        percent={Math.round((p.raised_amount / p.goal_amount) * 100)} 
+                       />
+                     ))
+                   ) : (
+                     <div className="col-span-3 text-center py-40 text-muted">
+                        Hiện chưa có chiến dịch nào đang diễn ra.
+                     </div>
+                   )}
                </div>
            </section>
 
@@ -52,41 +84,6 @@ const ProjectPage = () => {
                <h2 className="section-title mb-40">Duyệt trang theo danh mục</h2>
                <div className="cat-grid">
                    {categories.map((c, i) => <CategoryIcon key={i} label={c} />)}
-               </div>
-           </section>
-
-           <section className="container section-spacing">
-               <div className="section-header-row mb-32">
-                   <h2 className="section-title text-left m-0">Giáo dục</h2>
-                   <a href="#more" className="view-more">Xem thêm</a>
-               </div>
-               <div className="p-grid-3">
-                   {topProjects.slice(0, 3).map((p, i) => <ProjectCard key={i} {...p} />)}
-               </div>
-           </section>
-
-           <section className="container section-spacing">
-               <div className="section-header-row mb-32">
-                   <h2 className="section-title text-left m-0">An ninh lương thực</h2>
-                   <a href="#more" className="view-more">Xem thêm</a>
-               </div>
-               <div className="p-grid-3">
-                   {topProjects.slice(2, 5).map((p, i) => <ProjectCard key={i} {...p} />)}
-               </div>
-           </section>
-
-           <section className="container section-spacing pb-60">
-               <div className="section-header-row mb-32">
-                   <h2 className="section-title text-left m-0">Hành động khí hậu</h2>
-                   <a href="#more" className="view-more">Xem thêm</a>
-               </div>
-               <div className="p-grid-3">
-                   <ProjectCard {...topProjects[5]} />
-                   <ProjectCard {...topProjects[4]} />
-                   <ProjectCard {...topProjects[3]} />
-               </div>
-               <div className="text-center" style={{ marginTop: '40px' }}>
-                   <button className="btn cat-btn">Hiển thị thêm danh mục</button>
                </div>
            </section>
        </div>

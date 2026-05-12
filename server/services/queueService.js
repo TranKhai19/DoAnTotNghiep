@@ -1,45 +1,92 @@
 const Queue = require('bull');
 
 // Tạo queue cho webhook processing
-const webhookQueue = new Queue('webhooks', {
-  redis: {
-    host: process.env.REDIS_HOST || 'localhost',
-    port: process.env.REDIS_PORT || 6379
+// Nếu Redis không có, queue sẽ hoạt động ở chế độ "in-memory mock" để không crash server
+let webhookQueue;
+let redisAvailable = true;
+
+// Mock queue khi không có Redis (dùng cho môi trường dev/demo)
+const mockQueue = {
+  add: async (data) => {
+    const jobId = `mock_${Date.now()}`;
+    console.log(`📝 [Mock Queue] Job ${jobId} added (Redis unavailable)`);
+    // Process ngay lập tức (không async)
+    return { id: jobId, data };
   },
-  settings: {
-    maxStalledCount: 3,        // Max attempts khi stall
-    maxRetriesPerRequest: 3,   // Retry 3 lần
-    lockDuration: 30000,       // Lock 30 seconds
-    lockRenewTime: 15000       // Renew lock mỗi 15 seconds
-  }
-});
+  process: (concurrency, processor) => {
+    console.log('⚠️  [Mock Queue] Processor registered (will process inline)');
+    mockQueue._processor = processor;
+  },
+  on: () => {},
+  _processor: null
+};
 
-// Xử lý khi có lỗi
-webhookQueue.on('error', (error) => {
-  console.error('❌ Queue Error:', error);
-});
+try {
+  webhookQueue = new Queue('webhooks', {
+    redis: {
+      host: process.env.REDIS_HOST || 'localhost',
+      port: parseInt(process.env.REDIS_PORT) || 6379,
+      lazyConnect: true,
+      connectTimeout: 3000,
+      maxRetriesPerRequest: 1,
+    },
+  });
 
-webhookQueue.on('failed', (job, error) => {
-  console.error(`❌ Job ${job.id} failed after 3 attempts:`, error.message);
-});
+  webhookQueue.on('error', (error) => {
+    if (!redisAvailable) return; // Chỉ log lần đầu
+    redisAvailable = false;
+    console.warn('⚠️  Redis unavailable, switching to inline processing:', error.message);
+    
+    // Nếu có processor đang xử lý, chuyển qua mockQueue
+    if (webhookQueue._processor) {
+        mockQueue._processor = webhookQueue._processor;
+    }
+    
+    webhookQueue = mockQueue;
+  });
 
-webhookQueue.on('completed', (job) => {
-  console.log(`✅ Job ${job.id} completed:`, job.data.campaignId);
-});
+  webhookQueue.on('failed', (job, error) => {
+    console.error(`❌ Job ${job.id} failed:`, error.message);
+  });
+
+  webhookQueue.on('completed', (job) => {
+    console.log(`✅ Job ${job.id} completed:`, job.data.campaignId);
+  });
+
+} catch (err) {
+  console.warn('⚠️  Could not create Bull queue, using inline mock:', err.message);
+  webhookQueue = mockQueue;
+  redisAvailable = false;
+}
 
 // Hàm thêm job vào queue
 const addWebhookJob = async (jobData) => {
   try {
-    const job = await webhookQueue.add(jobData, {
-      attempts: 3,
-      backoff: {
-        type: 'exponential',
-        delay: 2000  // Start with 2s, exponential growth
-      },
-      removeOnComplete: true,
-      removeOnFail: false  // Keep failed jobs for debugging
+    console.log('🛠️ addWebhookJob called:', {
+      transactionId: jobData.transactionId,
+      amount: jobData.amount,
+      campaignId: jobData.campaignId,
+      useRedis: redisAvailable
     });
-    
+    const queue = redisAvailable ? webhookQueue : mockQueue;
+    const job = await queue.add(jobData, {
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 2000 },
+      removeOnComplete: true,
+      removeOnFail: false
+    });
+
+    // Nếu đang dùng mock + có processor, xử lý ngay
+    const processorToUse = redisAvailable ? null : (mockQueue._processor || savedProcessor);
+    if (processorToUse) {
+      console.log('⚠️ Using inline mock processor for webhook job:', { jobId: job.id });
+      setImmediate(() => {
+        processorToUse(job).catch(err =>
+          console.error('❌ Inline processor error:', err.message)
+        );
+      });
+    }
+
     console.log(`📝 Webhook job ${job.id} added to queue`);
     return job;
   } catch (error) {
@@ -48,13 +95,23 @@ const addWebhookJob = async (jobData) => {
   }
 };
 
+let savedProcessor = null;
+
 // Khởi tạo queue processor
 const initWebhookProcessor = (processor) => {
-  webhookQueue.process(3, processor); // 3 concurrent workers
+  savedProcessor = processor;
+  if (redisAvailable) {
+    webhookQueue.process(3, processor);
+  } else {
+    mockQueue._processor = processor;
+  }
+  console.log('✅ Webhook processor registered');
 };
 
 module.exports = {
   webhookQueue,
   addWebhookJob,
-  initWebhookProcessor
+  initWebhookProcessor,
+  getProcessor: () => savedProcessor
 };
+
