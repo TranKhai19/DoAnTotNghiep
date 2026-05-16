@@ -14,6 +14,8 @@ const ProjectDetail = () => {
   const [activeTab, setActiveTab] = useState('story');
   const [showQR, setShowQR] = useState(false);
   const [loadingReports, setLoadingReports] = useState(false);
+  const [recipients, setRecipients] = useState([]);
+  const [loadingRecipients, setLoadingRecipients] = useState(false);
 
   const thumbs = [
     "/assets/Visily-Export-to-Image-Image 105-2026-03-17.png",
@@ -45,6 +47,18 @@ const ProjectDetail = () => {
       })
       .catch(err => console.error(`❌ [DEBUG] Reports fetch error:`, err))
       .finally(() => setLoadingReports(false));
+
+    // Fetch recipients
+    setLoadingRecipients(true);
+    fetch(`${API_BASE}/api/campaigns/${id}/recipients`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d?.success) {
+          setRecipients(d.data || []);
+        }
+      })
+      .catch(err => console.error(`❌ [DEBUG] Recipients fetch error:`, err))
+      .finally(() => setLoadingRecipients(false));
   }, [id]);
 
   // Lắng nghe event donation:confirmed để cập nhật tiến độ real-time
@@ -79,10 +93,11 @@ const ProjectDetail = () => {
   const formatCurrency = (v) => Number(v || 0).toLocaleString('vi-VN') + '₫';
 
   const tabs = [
-    { key: 'story',       label: '📖 Câu chuyện' },
-    { key: 'transparency', label: '🔗 Minh bạch on-chain' },
-    { key: 'reports',     label: '📋 Báo cáo nghiệm thu' },
-    { key: 'comments',    label: '💬 Động viên' }
+    { key: 'story',         label: '📖 Câu chuyện' },
+    { key: 'recipients',    label: '👥 Danh sách thụ hưởng' },
+    { key: 'transparency',  label: '🔗 Minh bạch on-chain' },
+    { key: 'reports',       label: '📋 Báo cáo nghiệm thu' },
+    { key: 'comments',      label: '💬 Động viên' }
   ];
 
   return (
@@ -131,9 +146,15 @@ const ProjectDetail = () => {
               </p>
               <div className="pd-actions d-flex gap-24 mt-40">
                 <button className="btn btn-outline lg flex-1 pd-btn-h">Chia sẻ</button>
-                <button className="btn btn-primary lg flex-1 pd-btn-h" onClick={() => setShowQR(true)}>
-                  💳 Quyên góp ngay!
-                </button>
+                {(pct >= 100 || displayCampaign.status === 'completed' || displayCampaign.status === 'closed') ? (
+                  <button className="btn btn-secondary lg flex-1 pd-btn-h" disabled>
+                    ✅ Chiến dịch đã đạt đủ số tiền
+                  </button>
+                ) : (
+                  <button className="btn btn-primary lg flex-1 pd-btn-h" onClick={() => setShowQR(true)}>
+                    💳 Quyên góp ngay!
+                  </button>
+                )}
               </div>
 
                {/* Acceptance Reports Quick Access */}
@@ -169,13 +190,79 @@ const ProjectDetail = () => {
             </div>
           )}
 
+          {activeTab === 'recipients' && (
+            <div className="pd-recipients mt-40 fade-in">
+              <div className="section-header-row mb-32">
+                <h3 style={{fontSize: 28, fontWeight: 700, color: '#111827', marginBottom: 8}}>👥 Danh sách thụ hưởng</h3>
+                <p className="text-muted" style={{fontSize: 15}}>Danh sách chi tiết các cá nhân và đơn vị đã nhận được hỗ trợ từ chiến dịch này.</p>
+              </div>
+
+              {loadingRecipients ? (
+                <div className="text-center py-60">⏳ Đang tải dữ liệu...</div>
+              ) : recipients.length === 0 ? (
+                <div className="text-center py-60 bg-light rounded-20">
+                  <h4>Đang cập nhật danh sách</h4>
+                  <p className="text-muted">Thông tin sẽ hiển thị khi đợt giải ngân hoàn tất.</p>
+                </div>
+              ) : (
+                <div className="table-responsive" style={{ borderRadius: '16px', overflow: 'hidden', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', border: '1px solid #eee' }}>
+                   <table className="recipients-table" style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'white' }}>
+                     <thead style={{ backgroundColor: '#f8fafc' }}>
+                       <tr>
+                         <th style={{ padding: '16px', textAlign: 'left', fontSize: '13px', color: '#64748b', fontWeight: '600', textTransform: 'uppercase' }}>Họ tên / Đơn vị</th>
+                         <th style={{ padding: '16px', textAlign: 'left', fontSize: '13px', color: '#64748b', fontWeight: '600', textTransform: 'uppercase' }}>CCCD / ID</th>
+                         <th style={{ padding: '16px', textAlign: 'left', fontSize: '13px', color: '#64748b', fontWeight: '600', textTransform: 'uppercase' }}>Địa chỉ</th>
+                         <th style={{ padding: '16px', textAlign: 'right', fontSize: '13px', color: '#64748b', fontWeight: '600', textTransform: 'uppercase' }}>Số tiền nhận</th>
+                         <th style={{ padding: '16px', textAlign: 'center', fontSize: '13px', color: '#64748b', fontWeight: '600', textTransform: 'uppercase' }}>Minh bạch</th>
+                       </tr>
+                     </thead>
+                     <tbody>
+                       {recipients.map((r, idx) => (
+                         <tr key={r.id} style={{ borderBottom: idx < recipients.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                           <td style={{ padding: '20px 16px' }}>
+                              <div style={{ fontWeight: '700', color: '#1e293b' }}>{r.full_name}</div>
+                              <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>SĐT: {r.phone || '—'}</div>
+                           </td>
+                           <td style={{ padding: '20px 16px', color: '#475569' }}>{r.identifier || '—'}</td>
+                           <td style={{ padding: '20px 16px', color: '#475569', maxWidth: '300px' }}>{r.address || '—'}</td>
+                           <td style={{ padding: '20px 16px', textAlign: 'right' }}>
+                              <div style={{ fontWeight: '800', color: '#10b981', fontSize: '16px' }}>{Number(r.amount || 0).toLocaleString('vi-VN')}₫</div>
+                           </td>
+                           <td style={{ padding: '20px 16px', textAlign: 'center' }}>
+                              {r.tx_hash ? (
+                                <a href={`https://sepolia.etherscan.io/tx/${r.tx_hash}`} target="_blank" rel="noreferrer" title="Xem trên Blockchain" style={{ textDecoration: 'none' }}>
+                                   <span style={{ backgroundColor: '#f0fdf4', color: '#16a34a', padding: '6px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '600', border: '1px solid #bbf7d0' }}>
+                                      ✓ Đã xác thực
+                                   </span>
+                                </a>
+                              ) : (
+                                <span style={{ backgroundColor: '#f8fafc', color: '#94a3b8', padding: '6px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '600', border: '1px solid #e2e8f0' }}>
+                                   Đang xử lý
+                                </span>
+                              )}
+                           </td>
+                         </tr>
+                       ))}
+                     </tbody>
+                   </table>
+                </div>
+              )}
+              
+              <div className="mt-32 p-16 text-center" style={{ backgroundColor: '#fcfcfc', border: '1px dashed #ddd', borderRadius: '12px' }}>
+                <p style={{ margin: 0, fontSize: '13px', color: '#666' }}>
+                   Dữ liệu được xác thực bởi đội ngũ FundChain và lưu trữ minh bạch trên hệ thống.
+                </p>
+              </div>
+            </div>
+          )}
+
            {activeTab === 'transparency' && (
             <div className="pd-transparency mt-32 fade-in">
               <div className="transparency-header">
                 <h3>🔗 Lịch sử giao dịch trên Blockchain</h3>
                 <p>Mọi khoản quyên góp và giải ngân đều được ghi vĩnh viễn, không thể sửa đổi.</p>
                 <div className="d-flex gap-12 mt-16">
-                  <a href="/explorer" className="btn btn-outline sm">
+                  <a href="/explorer" target="_blank" rel="noreferrer" className="btn btn-outline sm">
                     🔍 Mở Block Explorer
                   </a>
                   {campaign?.status === 'closed' && (
@@ -238,9 +325,9 @@ const ProjectDetail = () => {
                         
                         {rep.tx_hash && (
                           <div className="rep-proof mt-24">
-                            <div className="proof-label">Bằng chứng On-chain (TxHash):</div>
-                            <a href={`/explorer?hash=${rep.tx_hash}`} target="_blank" className="proof-hash">
-                              {rep.tx_hash}
+                            <div className="proof-label">Bằng chứng On-chain:</div>
+                            <a href={`/explorer`} target="_blank" rel="noreferrer" className="btn btn-outline sm mt-8">
+                              🔍 Xem trên Block Explorer
                             </a>
                           </div>
                         )}
@@ -304,16 +391,26 @@ const ProjectDetail = () => {
 
             <div className="pd-actions d-flex gap-16 mb-32">
               <button className="btn btn-outline flex-1 pd-btn-h">Chia sẻ</button>
-              <button className="btn btn-primary flex-1 pd-btn-h" onClick={() => setShowQR(true)}>
-                💳 Quyên góp
-              </button>
+              {(pct >= 100 || displayCampaign.status === 'completed' || displayCampaign.status === 'closed') ? (
+                <button className="btn btn-secondary flex-1 pd-btn-h" disabled style={{fontSize: 12}}>
+                  Đã đủ mục tiêu
+                </button>
+              ) : (
+                <button className="btn btn-primary flex-1 pd-btn-h" onClick={() => setShowQR(true)}>
+                  💳 Quyên góp
+                </button>
+              )}
             </div>
 
             {/* Mã QR Code */}
-            <div className="qr-preview-box" onClick={() => setShowQR(true)}>
+            <div 
+              className={`qr-preview-box ${(pct >= 100 || displayCampaign.status === 'completed' || displayCampaign.status === 'closed') ? 'disabled' : ''}`} 
+              onClick={() => (pct < 100 && displayCampaign.status !== 'completed' && displayCampaign.status !== 'closed') && setShowQR(true)}
+              style={(pct >= 100 || displayCampaign.status === 'completed' || displayCampaign.status === 'closed') ? {opacity: 0.5, cursor: 'not-allowed'} : {}}
+            >
               <div className="qr-preview-icon">📱</div>
               <div>
-                <div className="qr-preview-title">Quét mã để quyên góp</div>
+                <div className="qr-preview-title">{(pct >= 100 || displayCampaign.status === 'completed' || displayCampaign.status === 'closed') ? 'Đã tạm dừng nhận quyên góp' : 'Quét mã để quyên góp'}</div>
                 <div className="qr-preview-sub">Mã: {displayCampaign.qr_code}</div>
               </div>
             </div>

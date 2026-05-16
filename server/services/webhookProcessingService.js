@@ -116,9 +116,15 @@ const processBankWebhook = async (job) => {
   }
 
   // ── 5. Cập nhật raised_amount campaign ───────────────────────────────
+  const updateData = { raised_amount: newRaisedAmount };
+  if (campaign.goal_amount && newRaisedAmount >= campaign.goal_amount && campaign.status !== 'closed') {
+    updateData.status = 'completed';
+    console.log(`🎉 [PROCESSOR] Campaign ${campaignId} reached its goal! Status updated to 'completed'.`);
+  }
+
   await supabase
     .from('campaigns')
-    .update({ raised_amount: newRaisedAmount })
+    .update(updateData)
     .eq('id', campaignId);
 
   // ── 6. Ghi nhận lên Blockchain (Chạy ngầm) ───────────────────────────

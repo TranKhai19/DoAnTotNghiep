@@ -9,7 +9,6 @@ const VietQRModal = ({ isOpen, onClose, campaign, amount: initialAmount }) => {
   const [amount, setAmount] = useState(initialAmount || '50000');
   const [paymentData, setPaymentData] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
 
   useEffect(() => {
     const handleDonationConfirmed = (event) => {
@@ -26,7 +25,6 @@ const VietQRModal = ({ isOpen, onClose, campaign, amount: initialAmount }) => {
     
     if (!isOpen) {
       setPaymentData(null);
-      setError(null);
     }
 
     return () => {
@@ -35,12 +33,15 @@ const VietQRModal = ({ isOpen, onClose, campaign, amount: initialAmount }) => {
   }, [isOpen, campaign.id, onClose]);
 
   const handleCreatePayment = async () => {
+    if (campaign.raised_amount >= campaign.goal_amount) {
+      toast.error('Chiến dịch đã đạt đủ số tiền, hiện tại không nhận thêm quyên góp.');
+      return;
+    }
     if (!amount || parseInt(amount) < 1000) {
       toast.error('Số tiền tối thiểu là 1,000đ');
       return;
     }
     setLoading(true);
-    setError(null);
     try {
       const response = await axios.post(`${API_URL}/api/payments/create-link`, {
         campaignId: campaign.id,
@@ -56,7 +57,6 @@ const VietQRModal = ({ isOpen, onClose, campaign, amount: initialAmount }) => {
     } catch (err) {
       console.error('Error creating payment link:', err);
       const msg = err.response?.data?.error || 'Lỗi kết nối đến máy chủ.';
-      setError(msg);
       toast.error(msg);
     } finally {
       setLoading(false);

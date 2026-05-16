@@ -4,6 +4,24 @@ import MediaUploader from './MediaUploader';
 import PDFViewer from './PDFViewer';
 import { z } from 'zod';
 
+const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+
+const getAuthHeader = () => {
+  let token = localStorage.getItem('access_token');
+  if (!token) {
+    const projectRef = 'mfyncysdujxdeeypppbk';
+    const sbKey = `sb-${projectRef}-auth-token`;
+    const sbData = localStorage.getItem(sbKey);
+    if (sbData) {
+      try {
+        const parsed = JSON.parse(sbData);
+        token = parsed.access_token;
+      } catch (e) {}
+    }
+  }
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
 // Zod Schema for validation
 const beneficiarySchema = z.object({
   full_name: z.string().min(2, 'Họ tên phải có ít nhất 2 ký tự').max(100, 'Họ tên quá dài'),
@@ -20,6 +38,7 @@ const BeneficiaryForm = ({ campaignId, onAddSuccess }) => {
     identifier: '',
     phone: '',
     address: '',
+    amount: '',
   });
   const [documentUrl, setDocumentUrl] = useState('');
 
@@ -65,12 +84,12 @@ const BeneficiaryForm = ({ campaignId, onAddSuccess }) => {
       identifier: formData.identifier,
       phone: formData.phone,
       address: formData.address,
-      name: formData.full_name, 
-      document_url: documentUrl,
+      amount: Number(formData.amount) || 0,
+      campaign_id: campaignId,
     };
 
-    const { data: beneficiary, error: benError } = await supabase
-      .from('beneficiaries')
+    const { data: recipient, error: benError } = await supabase
+      .from('campaign_recipients')
       .insert([payload])
       .select()
       .single();
@@ -81,32 +100,117 @@ const BeneficiaryForm = ({ campaignId, onAddSuccess }) => {
       return;
     }
     
-    if (campaignId) {
-        const { error: campError } = await supabase
-            .from('campaigns')
-            .update({ beneficiary_id: beneficiary.id })
-            .eq('id', campaignId);
-            
-        if (campError) {
-             console.error("Link to campaign failed:", campError);
-        }
-    }
-
     setLoading(false);
     alert('Đã thêm hồ sơ người thụ hưởng thành công!');
-    setFormData({ full_name: '', identifier: '', phone: '', address: '' });
+    setFormData({ full_name: '', identifier: '', phone: '', address: '', amount: '' });
     setDocumentUrl('');
     
     if (onAddSuccess) {
-        onAddSuccess(beneficiary);
+        onAddSuccess(recipient);
     }
+  };
+
+  const handleBulkUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const text = event.target.result;
+      const lines = text.split(/\r?\n/).filter(line => line.trim());
+      
+      // Hàm helper để parse 1 dòng CSV (handle quoted commas)
+      const parseCSVLine = (line) => {
+        const result = [];
+        let cur = '';
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+          const char = line[i];
+          if (char === '"') {
+            inQuotes = !inQuotes;
+          } else if (char === ',' && !inQuotes) {
+            result.push(cur.trim().replace(/^"|"$/g, ''));
+            cur = '';
+          } else {
+            cur += char;
+          }
+        }
+        result.push(cur.trim().replace(/^"|"$/g, ''));
+        return result;
+      };
+
+      const rows = lines.map(parseCSVLine);
+      
+      // Bỏ qua header nếu có
+      const dataRows = rows[0][0].toLowerCase().includes('name') || rows[0][0].toLowerCase().includes('họ') ? rows.slice(1) : rows;
+      
+      const recipients = dataRows
+        .filter(row => row.length >= 3 && row[0])
+        .map(row => ({
+          full_name: row[0],
+          identifier: row[1] || '',
+          phone: row[2] || '',
+          address: row[3] || '',
+          amount: Number(row[4]) || 0,
+          campaign_id: campaignId
+        }));
+
+      if (recipients.length === 0) {
+        alert('Không tìm thấy dữ liệu hợp lệ trong file CSV. Định dạng yêu cầu: Họ tên, CCCD, SĐT, Địa chỉ');
+        return;
+      }
+
+      setLoading(true);
+      
+      // Sử dụng API backend để bulk insert (đã viết ở Controller)
+      try {
+        const res = await fetch(`${API_BASE}/api/campaigns/${campaignId}/recipients/bulk`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeader()
+          },
+          body: JSON.stringify(recipients)
+        });
+        
+        const result = await res.json();
+        
+        if (result.success) {
+          alert(result.message || `Đã tải lên thành công ${recipients.length} người thụ hưởng!`);
+          if (onAddSuccess) {
+            onAddSuccess();
+          }
+        } else {
+          alert('Lỗi khi upload hàng loạt: ' + result.error);
+        }
+      } catch (err) {
+        console.error('Error bulk uploading:', err);
+        alert('Lỗi kết nối khi upload hàng loạt');
+      } finally {
+        setLoading(false);
+      }
+    };
+    reader.readAsText(file);
   };
 
   return (
     <div style={{ backgroundColor: '#faf9ff', padding: 20, borderRadius: 8, border: '1px solid #eaeaea', marginBottom: 24 }}>
-      <h4 className="mb-16" style={{ fontSize: 15, color: 'var(--primary)' }}>+ Thêm Hồ sơ Người Thụ Hưởng Mới</h4>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h4 style={{ fontSize: 15, color: 'var(--primary)', margin: 0 }}>+ Quản lý Hồ sơ Người Thụ Hưởng</h4>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <label className="btn btn-outline sm" style={{ cursor: 'pointer', margin: 0 }}>
+            📁 Tải lên CSV hàng loạt
+            <input type="file" accept=".csv" onChange={handleBulkUpload} style={{ display: 'none' }} disabled={loading} />
+          </label>
+        </div>
+      </div>
+
+      <p style={{ fontSize: 12, color: '#666', marginBottom: 20 }}>
+        Nhập thủ công bên dưới hoặc sử dụng file CSV (định dạng: Họ tên, CCCD, Số điện thoại, Địa chỉ)
+      </p>
+
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }} noValidate>
-        
+        {/* ... existing form fields ... */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             <div className="form-group">
                 <label className="admin-label mb-8">Họ tên / Đơn vị <span className="text-danger">*</span></label>
@@ -163,6 +267,18 @@ const BeneficiaryForm = ({ campaignId, onAddSuccess }) => {
                 />
                 {errors.address && <div style={{ color: 'red', fontSize: '13px', marginTop: '4px' }}>{errors.address}</div>}
             </div>
+        </div>
+
+        <div className="form-group">
+            <label className="admin-label mb-8">Số tiền giải ngân dự kiến (VNĐ) <span className="text-danger">*</span></label>
+            <input 
+              type="number" 
+              name="amount" 
+              value={formData.amount} 
+              onChange={handleChange} 
+              placeholder="Ví dụ: 10000000" 
+              className="admin-input" 
+            />
         </div>
 
         <div className="form-group">

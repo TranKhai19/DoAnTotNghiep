@@ -39,6 +39,7 @@ const verifyToken = async (req, res, next) => {
       ...user,
       role: profile?.role || user.app_metadata?.role || user.user_metadata?.role || 'user'
     };
+    req.token = token;
 
     next();
   } catch (error) {

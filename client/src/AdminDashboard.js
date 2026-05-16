@@ -68,16 +68,18 @@ const AdminSidebar = ({ role }) => {
         <Link to="/admin/reports" className={`admin-nav-item ${isActive('/admin/reports')}`}>
           <span className="icon">📋</span> Báo cáo nghiệm thu
         </Link>
-        <Link to="/explorer" target="_blank" className="admin-nav-item">
+        <Link to="/explorer" target="_blank" rel="noreferrer" className="admin-nav-item">
           <span className="icon">🔍</span> Block Explorer
         </Link>
+        {(role === 'admin' || role === 'staff') && (
+          <Link to="/admin/create-campaign" className={`admin-nav-item ${isActive('/admin/create-campaign')}`}>
+            <span className="icon">⚡</span> Tạo chiến dịch
+          </Link>
+        )}
         {role === 'admin' && (
           <>
             <Link to="/admin/organizations" className={`admin-nav-item ${isActive('/admin/organizations')}`}>
               <span className="icon">🏢</span> Hồ sơ tổ chức
-            </Link>
-            <Link to="/admin/create-campaign" className={`admin-nav-item ${isActive('/admin/create-campaign')}`}>
-              <span className="icon">⚡</span> Tạo chiến dịch
             </Link>
             <Link to="/admin/personnel" className={`admin-nav-item ${isActive('/admin/personnel')}`}>
               <span className="icon">👥</span> Quản lý nhân sự
@@ -175,7 +177,6 @@ const AdminCampaigns = () => {
                 <tr key={c.id}>
                     <td>
                        <div className="fw-600 color-dark">{c.title}</div>
-                       <div className="text-muted" style={{fontSize: 11}}>#{c.id.slice(0, 8)}</div>
                     </td>
                     <td>
                        <div className="fw-600 text-success">{parseInt(c.raised_amount || 0).toLocaleString()}đ</div>
@@ -206,63 +207,217 @@ const AdminCampaigns = () => {
   );
 };
 
-const CampaignDetails = () => {
+const CampaignDetails = ({ role, user }) => {
   const { id } = useParams();
   const [campaign, setCampaign] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [activating, setActivating] = useState(false);
+  const [recipients, setRecipients] = useState([]);
+
+  const fetchRecipients = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/campaigns/${id}/recipients`, {
+        headers: { ...getAuthHeader() }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setRecipients(data.data);
+      }
+    } catch (err) {
+      console.error('Error fetching recipients:', err);
+    }
+  };
+
+  const fetchCampaign = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/campaigns/${id}`, {
+        headers: { ...getAuthHeader() }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setCampaign(data.data);
+      }
+    } catch (err) {
+      console.error('Error fetching campaign details:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchCampaign = async () => {
-      setLoading(true);
-      try {
-        const res = await fetch(`${API_BASE}/api/campaigns/${id}`, {
-          headers: { ...getAuthHeader() }
-        });
-        const data = await res.json();
-        if (data.success) {
-          setCampaign(data.data);
-        }
-      } catch (err) {
-        console.error('Error fetching campaign details:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchCampaign();
+    fetchRecipients();
   }, [id]);
 
-  const handleAddBeneficiarySuccess = () => {
-    // Tải lại danh sách người thụ hưởng hoặc cập nhật UI
+  const handleActivate = async () => {
+    if (!window.confirm('Bạn có chắc chắn muốn kích hoạt chiến dịch này?')) return;
+    
+    setActivating(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/campaigns/${id}/approval`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader()
+        },
+        body: JSON.stringify({ 
+          approval_status: 'approved',
+          approved_by: user?.id 
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert('Kích hoạt chiến dịch thành công!');
+        fetchCampaign();
+      } else {
+        alert('Lỗi: ' + data.error);
+      }
+    } catch (err) {
+      console.error('Error activating campaign:', err);
+      alert('Lỗi kết nối khi kích hoạt chiến dịch');
+    } finally {
+      setActivating(false);
+    }
+  };
+
+  const handleAddRecipientSuccess = () => {
+    fetchRecipients();
   };
 
   return (
     <div className="admin-page fade-in">
-      <div className="admin-header-row mb-32">
+      <div className="admin-header-row mb-32" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'white', padding: '24px', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
         <div>
-           <Link to="/admin" className="text-muted d-block mb-8" style={{textDecoration: 'none'}}>← Trở về Chiến dịch chính</Link>
-           <h2 className="mb-0">Hồ sơ chiến dịch #{id}</h2>
+           <Link to="/admin" className="text-muted d-block mb-8" style={{textDecoration: 'none', fontSize: '14px'}}>← Trở về danh sách chiến dịch</Link>
+           <h2 className="mb-0" style={{ fontSize: '28px', color: '#1a1a1a', fontWeight: '700' }}>Hồ sơ chiến dịch <span style={{ color: 'var(--primary)' }}>#{id.substring(0,8)}</span></h2>
         </div>
+        {role === 'admin' && campaign?.status === 'pending_approval' && (
+          <button 
+            className="btn btn-primary" 
+            onClick={handleActivate} 
+            disabled={activating}
+            style={{ 
+              backgroundColor: '#10b981', 
+              borderColor: '#10b981', 
+              padding: '12px 24px', 
+              borderRadius: '12px',
+              fontWeight: '600',
+              boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)'
+            }}
+          >
+            {activating ? 'Đang kích hoạt...' : '🚀 Kích hoạt chiến dịch ngay'}
+          </button>
+        )}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-        {/* Detail section */}
-        <div className="admin-card" style={{padding: 24, alignSelf: 'start'}}>
-           <h3 className="mb-16" style={{color: 'var(--primary)'}}>Chi tiết chiến dịch</h3>
-           <div className="mb-16"><strong className="text-muted">Tên chiến dịch:</strong> <div className="fw-600 mt-4">{campaign?.title}</div></div>
-           <div className="mb-16"><strong className="text-muted">Mục tiêu quyên góp:</strong> <div className="mt-4">${(campaign?.goal_amount || 0).toLocaleString()}</div></div>
-           <div className="mb-16"><strong className="text-muted">Đã quyên góp:</strong> <div className="mt-4 text-success fw-600">${(campaign?.raised_amount || 0).toLocaleString()}</div></div>
-           <button className="btn btn-outline w-100 mt-8">Chỉnh sửa thông tin chiến dịch</button>
+      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 2fr', gap: '32px' }}>
+        {/* Left: Campaign Stats & Details */}
+        <div className="admin-card" style={{padding: '32px', borderRadius: '20px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.04)', background: 'linear-gradient(to bottom, #ffffff, #fcfcff)'}}>
+           <div className="d-flex justify-content-between align-items-start mb-24">
+             <h3 style={{fontSize: '20px', fontWeight: '700', color: '#333'}}>Thông tin chiến dịch</h3>
+             <span style={{ 
+               padding: '6px 12px', 
+               borderRadius: '30px', 
+               fontSize: '12px', 
+               fontWeight: '600',
+               textTransform: 'uppercase',
+               backgroundColor: campaign?.status === 'active' ? '#ecfdf5' : '#fff7ed',
+               color: campaign?.status === 'active' ? '#059669' : '#d97706'
+             }}>
+               ● {campaign?.status || 'Đang tải...'}
+             </span>
+           </div>
+
+           <div className="campaign-stat-item mb-20">
+             <div className="text-muted mb-4" style={{fontSize: '13px'}}>Tiêu đề</div>
+             <div style={{fontSize: '18px', fontWeight: '600', color: '#1a1a1a'}}>{campaign?.title}</div>
+           </div>
+
+           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
+              <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '12px' }}>
+                <div className="text-muted mb-4" style={{fontSize: '12px'}}>Mục tiêu</div>
+                <div style={{fontSize: '20px', fontWeight: '700', color: '#1e293b'}}>{(campaign?.goal_amount || 0).toLocaleString()}₫</div>
+              </div>
+              <div style={{ background: '#f0fdf4', padding: '16px', borderRadius: '12px' }}>
+                <div className="text-muted mb-4" style={{fontSize: '12px'}}>Đã quyên góp</div>
+                <div style={{fontSize: '20px', fontWeight: '700', color: '#16a34a'}}>{(campaign?.raised_amount || 0).toLocaleString()}₫</div>
+              </div>
+           </div>
+
+           <div className="progress-container mb-24" style={{ height: '8px', background: '#e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
+              <div style={{ 
+                width: `${Math.min(100, ((campaign?.raised_amount || 0) / (campaign?.goal_amount || 1)) * 100)}%`, 
+                height: '100%', 
+                background: 'linear-gradient(90deg, #3b82f6, #2563eb)',
+                borderRadius: '4px'
+              }}></div>
+           </div>
+
+           <button className="btn btn-outline w-100" style={{ borderRadius: '12px', padding: '10px' }}>Chỉnh sửa hồ sơ</button>
         </div>
 
-        {/* Beneficiary segment */}
-        <div className="admin-card" style={{padding: 24}}>
-           <h3 className="mb-8" style={{color: 'var(--primary)'}}>Danh sách người thụ hưởng</h3>
-           <p className="text-muted mb-24" style={{fontSize: 14}}>Quản lý các cá nhân, tổ chức hoặc địa phương nhận giải ngân từ chiến dịch này.</p>
+        {/* Right: Recipients Management */}
+        <div className="admin-card" style={{padding: '32px', borderRadius: '20px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.04)'}}>
+           <div className="d-flex align-items-center gap-12 mb-8">
+             <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3b82f6', fontSize: '20px' }}>👥</div>
+             <h3 style={{fontSize: '20px', fontWeight: '700', color: '#333', margin: 0}}>Danh sách thụ hưởng</h3>
+           </div>
+           <p className="text-muted mb-24" style={{fontSize: '14px'}}>Minh bạch hóa các cá nhân và tổ chức nhận giải ngân từ quỹ cộng đồng.</p>
            
-           <BeneficiaryForm campaignId={id} onAddSuccess={handleAddBeneficiarySuccess} />
+           <BeneficiaryForm campaignId={id} onAddSuccess={handleAddRecipientSuccess} />
            
-           <div className="text-center text-muted py-32" style={{border: '1px dashed #ccc', borderRadius: 8}}>
-              Chưa có danh sách người thụ hưởng nào được liên kết.
+           <div className="mt-32">
+             <div className="d-flex justify-content-between align-items-center mb-16">
+                <div style={{ fontWeight: '600', color: '#64748b' }}>Đã tải lên {recipients.length} hồ sơ</div>
+                {recipients.length > 0 && <button className="btn btn-link text-primary p-0" style={{fontSize: '13px', textDecoration: 'none'}}>Xuất báo cáo PDF</button>}
+             </div>
+
+             {recipients.length > 0 ? (
+               <div className="table-responsive" style={{ borderRadius: '12px', border: '1px solid #f1f5f9' }}>
+                 <table className="admin-table" style={{ margin: 0 }}>
+                   <thead style={{ background: '#f8fafc' }}>
+                     <tr>
+                       <th style={{ padding: '14px 20px', color: '#475569', fontSize: '12px' }}>HỌ TÊN / ĐƠN VỊ</th>
+                       <th style={{ padding: '14px 20px', color: '#475569', fontSize: '12px' }}>ĐỊNH DANH</th>
+                       <th style={{ padding: '14px 20px', color: '#475569', fontSize: '12px' }}>SỐ ĐIỆN THOẠI</th>
+                       <th style={{ padding: '14px 20px', color: '#475569', fontSize: '12px' }}>SỐ TIỀN</th>
+                       <th style={{ padding: '14px 20px', color: '#475569', fontSize: '12px' }}>BLOCKCHAIN</th>
+                     </tr>
+                   </thead>
+                   <tbody>
+                     {recipients.map((r, idx) => (
+                       <tr key={r.id} style={{ borderTop: idx > 0 ? '1px solid #f1f5f9' : 'none' }}>
+                         <td style={{ padding: '16px 20px' }}>
+                           <div className="fw-700" style={{ color: '#1e293b' }}>{r.full_name}</div>
+                           <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>{r.address}</div>
+                         </td>
+                         <td style={{ padding: '16px 20px', color: '#64748b' }}>{r.identifier || '—'}</td>
+                         <td style={{ padding: '16px 20px', color: '#64748b' }}>{r.phone}</td>
+                         <td style={{ padding: '16px 20px' }}>
+                           <div className="text-success fw-800" style={{ fontSize: '15px' }}>{Number(r.amount || 0).toLocaleString()}₫</div>
+                         </td>
+                         <td style={{ padding: '16px 20px' }}>
+                           {r.tx_hash ? (
+                             <a href={`https://sepolia.etherscan.io/tx/${r.tx_hash}`} target="_blank" rel="noreferrer" className="badge bg-light text-primary" style={{ textDecoration: 'none', fontSize: '10px' }}>
+                               {r.tx_hash.substring(0, 10)}...
+                             </a>
+                           ) : (
+                             <span className="badge bg-light text-muted" style={{ fontSize: '10px' }}>Chưa đẩy</span>
+                           )}
+                         </td>
+                       </tr>
+                     ))}
+                   </tbody>
+                 </table>
+               </div>
+             ) : (
+               <div className="text-center text-muted py-48" style={{border: '2px dashed #e2e8f0', borderRadius: '16px', background: '#f8fafc'}}>
+                  <div style={{ fontSize: '40px', marginBottom: '12px' }}>📥</div>
+                  <div className="fw-600">Chưa có dữ liệu</div>
+                  <p style={{ fontSize: '13px' }}>Hãy thêm thủ công hoặc tải file CSV lên.</p>
+               </div>
+             )}
            </div>
         </div>
       </div>
@@ -426,7 +581,7 @@ const CreateCampaign = ({ user }) => {
       raised_amount: 0,
       qr_code: rawData.qr_code || null,
       beneficiary_id: formData.get('beneficiary_id') || null,
-      status: 'active',
+      status: 'pending_approval',
       created_by: user?.id
     };
 
@@ -647,16 +802,16 @@ const AdminDashboard = () => {
         <div className="admin-content-area">
           <Routes>
             <Route path="/" element={<AdminCampaigns />} />
-            <Route path="/campaign/:id" element={<CampaignDetails />} />
+            <Route path="/campaign/:id" element={<CampaignDetails role={role} user={user} />} />
             
             {/* Admin Routes */}
-            {role === 'admin' && (
-              <>
-                <Route path="/organizations" element={<OrgProfile user={user} />} />
-                <Route path="/create-campaign" element={<CreateCampaign user={user} />} />
-                <Route path="/personnel" element={<PersonnelManagement />} />
-              </>
-            )}
+             <Route path="/create-campaign" element={<CreateCampaign user={user} />} />
+             {role === 'admin' && (
+               <>
+                 <Route path="/organizations" element={<OrgProfile user={user} />} />
+                 <Route path="/personnel" element={<PersonnelManagement />} />
+               </>
+             )}
 
             {/* Staff Routes */}
              {/* Shared Routes */}

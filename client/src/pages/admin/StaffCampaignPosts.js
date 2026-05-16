@@ -346,7 +346,7 @@ const StaffCampaignPosts = ({ user }) => {
         <button
           className="btn btn-primary"
           id="btn-create-new-campaign"
-          onClick={() => navigate('/admin/campaign/new')}
+          onClick={() => navigate('/admin/create-campaign')}
           style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 24px' }}
         >
           <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
@@ -492,7 +492,6 @@ const StaffCampaignPosts = ({ user }) => {
                         )}
                         <div>
                           <div className="scp-title-text">{campaign.title}</div>
-                          <div className="scp-title-id">#{campaign.id}</div>
                         </div>
                       </div>
                     </td>

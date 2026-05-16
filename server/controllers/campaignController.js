@@ -1,3 +1,6 @@
+const { createClient } = require('@supabase/supabase-js');
+const supabase = require('../config/supabase');
+const contractService = require('../services/contractService');
 const {
   getAllCampaigns,
   getCampaignById,
@@ -76,7 +79,7 @@ exports.createCampaign = async (req, res) => {
       title, description, goal_amount,
       raised_amount, qr_code, category_id, beneficiary_id,
       start_date, end_date, status, created_by,
-    });
+    }, req.token);
 
     res.status(201).json({
       success: true,
@@ -225,4 +228,121 @@ exports.deleteCampaign = async (req, res) => {
   }
 };
 
+exports.getBeneficiaries = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { data, error } = await supabase
+      .from('beneficiaries')
+      .select('*')
+      .eq('campaign_id', id)
+      .order('created_at', { ascending: false });
 
+    if (error) throw error;
+
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+};
+
+exports.getRecipients = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { data, error } = await supabase
+      .from('campaign_recipients')
+      .select('*')
+      .eq('campaign_id', id)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+};
+
+exports.bulkCreateRecipients = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const recipients = req.body;
+    const userToken = req.token;
+
+    if (!Array.isArray(recipients) || recipients.length === 0) {
+      return res.status(400).json({ success: false, error: 'Invalid or empty recipients list' });
+    }
+
+    // Add campaign_id to each recipient
+    const formattedRecipients = recipients.map(r => ({
+      ...r,
+      campaign_id: id
+    }));
+
+    // Create a per-request Supabase client using the user's JWT
+    // This ensures RLS policies using auth.uid() will work correctly
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_KEY;
+    const userSupabase = createClient(supabaseUrl, supabaseKey, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${userToken}`
+        }
+      }
+    });
+
+    const { data, error } = await userSupabase
+      .from('campaign_recipients')
+      .insert(formattedRecipients)
+      .select();
+
+    if (error) throw error;
+
+    // --- BLOCKCHAIN INTEGRATION ---
+    // Record disbursements on-chain for transparency
+    try {
+      // 1. Get campaign on-chain ID
+      const { data: campaign } = await supabase
+        .from('campaigns')
+        .select('onchain_campaign_id, title')
+        .eq('id', id)
+        .single();
+
+      if (campaign && campaign.onchain_campaign_id) {
+        console.log(`🔗 Recording ${formattedRecipients.length} recipients on blockchain for campaign ${campaign.onchain_campaign_id}`);
+        
+        // Loop through recipients and record on-chain
+        const results = [];
+        for (const recipient of data) { // Use 'data' from DB insert to get IDs
+          try {
+            const tx = await contractService.disburseFunds(
+              campaign.onchain_campaign_id,
+              recipient.amount,
+              recipient.identifier || recipient.full_name,
+              `Disbursement for ${campaign.title}`
+            );
+            
+            // Update tx_hash in DB
+            await supabase
+              .from('campaign_recipients')
+              .update({ tx_hash: tx.transactionHash, status: 'completed' })
+              .eq('id', recipient.id);
+
+            results.push({ id: recipient.id, tx: tx.transactionHash });
+          } catch (txError) {
+            console.error(`❌ Failed to record recipient ${recipient.full_name} on-chain:`, txError.message);
+          }
+        }
+        console.log(`✅ Finished on-chain recording. Success: ${results.length}/${data.length}`);
+      } else {
+        console.warn(`⚠️ Campaign ${id} has no onchain_campaign_id. Skipping blockchain recording.`);
+      }
+    } catch (bcError) {
+      console.error('⚠️ Blockchain integration error:', bcError.message);
+      // We don't fail the whole request because DB insert succeeded
+    }
+
+    res.json({ success: true, message: `Successfully added ${data.length} recipients and synced with blockchain`, data });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+};

@@ -105,7 +105,7 @@ const OnchainHistoryTable = ({ campaignId }) => {
                                 <td style={{ padding: '16px 12px', fontSize: 14 }}>{formatDate(item.timestamp)}</td>
                                 <td style={{ padding: '16px 12px', fontSize: 14, fontFamily: 'monospace', color: 'var(--primary)', fontWeight: 600 }}>
                                     <a href={`https://etherscan.io/tx/${item.txHash}`} target="_blank" rel="noreferrer" style={{ textDecoration: 'none', color: 'inherit' }}>
-                                        {item.txHash}
+                                        {item.txHash.substring(0, 6)}...{item.txHash.substring(item.txHash.length - 4)}
                                     </a>
                                 </td>
                                 <td style={{ padding: '16px 12px', fontSize: 14 }}>
@@ -120,7 +120,9 @@ const OnchainHistoryTable = ({ campaignId }) => {
                                         {item.type}
                                     </span>
                                 </td>
-                                <td style={{ padding: '16px 12px', fontSize: 14, fontFamily: 'monospace' }}>{item.from}</td>
+                                <td style={{ padding: '16px 12px', fontSize: 14, fontFamily: 'monospace' }}>
+                                    {item.from.substring(0, 6)}...{item.from.substring(item.from.length - 4)}
+                                </td>
                                 <td style={{ padding: '16px 12px', fontSize: 15, fontWeight: 600 }}>
                                     {item.amount > 0 ? `${item.amount.toLocaleString()}₫` : '-'}
                                 </td>

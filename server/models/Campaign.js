@@ -93,7 +93,7 @@ const getCampaignById = async (id) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // Create campaign — luôn tạo với status='draft', approval_status='pending'
 // ─────────────────────────────────────────────────────────────────────────────
-const createCampaign = async (campaignData) => {
+const createCampaign = async (campaignData, token = null) => {
   try {
     const {
       title,
@@ -145,18 +145,32 @@ const createCampaign = async (campaignData) => {
       created_by:       created_by || null,
     };
 
-    const { data, error } = await supabase
+    let client = supabase;
+    if (token) {
+      const { createClient } = require('@supabase/supabase-js');
+      client = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY, {
+        global: { headers: { Authorization: `Bearer ${token}` } }
+      });
+    }
+
+    console.log('🚀 [MODEL] Attempting to insert campaign:', JSON.stringify(newCampaign, null, 2));
+    console.log('🔑 [MODEL] Token provided:', token ? 'YES' : 'NO');
+
+    const { data, error } = await client
       .from(TABLE_NAME)
       .insert([newCampaign])
       .select()
       .single();
 
-    if (error) throw new Error(error.message);
+    if (error) {
+      console.error('❌ [MODEL] Insert error:', error);
+      throw new Error(error.message);
+    }
 
     // Automatically generate qr_code using the end of UUID if not provided
     if (!data.qr_code && data.id) {
       const generatedQrCode = `QG${data.id.slice(-6).toUpperCase()}`;
-      await supabase
+      await client
         .from(TABLE_NAME)
         .update({ qr_code: generatedQrCode })
         .eq('id', data.id);
@@ -367,10 +381,12 @@ const approveCampaign = async (id) => {
     // Step 1: Mint campaign on blockchain (Besu)
     let blockchainTxHash = null;
     let blockchainReceipt = null;
+    let onchainCampaignId = null;
     try {
       blockchainReceipt = await contractService.createCampaign(campaign.goal_amount);
       blockchainTxHash = blockchainReceipt?.transactionHash || null;
-      console.log(`✅ Campaign ${id} minted on blockchain: ${blockchainTxHash}`);
+      onchainCampaignId = blockchainReceipt?.campaignId || null;
+      console.log(`✅ Campaign ${id} minted on blockchain: ${blockchainTxHash}, ID: ${onchainCampaignId}`);
     } catch (blockchainError) {
       console.error(`⚠️ Blockchain minting failed for campaign ${id}:`, blockchainError.message);
       throw new Error(`Failed to mint campaign on blockchain: ${blockchainError.message}`);
@@ -382,7 +398,8 @@ const approveCampaign = async (id) => {
       .update({
         status: 'published',
         approved_at: new Date().toISOString(),
-        blockchain_tx_hash: blockchainTxHash
+        blockchain_tx_hash: blockchainTxHash,
+        onchain_campaign_id: onchainCampaignId ? parseInt(onchainCampaignId) : null
       })
       .eq('id', id)
       .select()
